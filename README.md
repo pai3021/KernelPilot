@@ -1,6 +1,6 @@
 # KernelPilot
 
-KernelPilot is a personal project for experimenting with coding agents on GPU kernels. It creates a workspace for each [KernelBench](https://github.com/ScalingIntelligence/KernelBench) task, evaluates candidate kernels on a remote GPU over SSH, and saves the results for the next attempt.
+KernelPilot helps you optimize GPU kernels with a coding agent. It creates a workspace for each [KernelBench](https://github.com/ScalingIntelligence/KernelBench) task, runs correctness and latency checks on a GPU host over SSH, and keeps the results for the next attempt.
 
 In one recorded RTX 4090 run, a Codex-generated Triton kernel cut `91_cumsum_reverse` from 30.7 ms to 9.84 ms (**3.12×**). [Code and benchmark details](#recorded-ssh-example).
 
