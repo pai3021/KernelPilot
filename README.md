@@ -1,43 +1,31 @@
 # KernelPilot
 
-KernelPilot is a personal GPU kernel optimization project. It gives a coding agent an isolated task workspace, checks candidates with a fixed benchmark, and uses the results to guide the next attempt.
+KernelPilot is a personal project for experimenting with coding agents on GPU kernels. It creates a workspace for each [KernelBench](https://github.com/ScalingIntelligence/KernelBench) task, evaluates candidate kernels on a remote GPU over SSH, and saves the results for the next attempt.
 
-The current workflow targets [KernelBench](https://github.com/ScalingIntelligence/KernelBench) tasks. A local WSL control process runs the agent; a remote GPU host performs correctness and latency evaluation over SSH.
-
-In one recorded RTX 4090 task, a Codex-generated Triton reverse scan reduced KernelBench `91_cumsum_reverse` latency from 30.7 ms to 9.84 ms (**3.12×**). [See the example](#recorded-ssh-example).
+In one recorded RTX 4090 run, a Codex-generated Triton kernel cut `91_cumsum_reverse` from 30.7 ms to 9.84 ms (**3.12×**). [Code and benchmark details](#recorded-ssh-example).
 
 ## System overview
 
-KernelPilot supports a manual single-task workflow and an optional multi-round campaign. The diagram shows the campaign: a master agent selects a parent kernel, spawns an isolated child workspace, and drives a sub agent to optimize and evaluate candidates. Archived variants can seed later rounds.
+You can work on one task yourself or run a multi-round campaign. In a campaign, the master agent picks a parent kernel and creates a fresh child workspace. A sub agent edits and benchmarks the kernel; passing variants go into the archive for later rounds.
 
 ![KernelPilot architecture showing the master/sub loop, agent adapters, cross-session archive, and optional harness proposals](docs/images/kernelpilot-system-overview.png)
 
-The sub agent uses two layers. **(a) Generic Agent Substrate** supplies the agent loop, context management, and tool use. Codex and Claude Code have runtime adapters today; other agents can be added through the same adapter interface. **(b) Kernel-Specific Harness** supplies the task template, benchmark adapter, reference archive (variants and lessons across sessions), and skill catalog. Optional harness proposals are reviewed against scope, evidence, and regression checks before a guidance change is applied.
+The sub agent runs on **(a) Generic Agent Substrate**: the agent loop, context, and tools supplied by Codex or Claude Code. KernelPilot adds **(b) Kernel-Specific Harness**: a task template, benchmark adapter, reference archive with variants and lessons from earlier runs, and kernel skills. Campaigns can also propose changes to harness guidance; those changes go through evidence and regression checks.
 
-The [quick start](#quick-start) follows the manual path: you drive one child workspace directly and evaluate over SSH on a GPU host. See [closed-loop campaigns](docs/closed-loop.md) for the optional master/sub workflow.
+The [quick start](#quick-start) uses one child workspace. For the master/sub workflow, see [closed-loop campaigns](docs/closed-loop.md).
 
-## What is implemented
+## In the code
 
-- **Agent runtimes:** Codex and Claude Code share a task contract and workspace setup through `agent_runtime/`.
-- **Isolated search:** `campaign/` plans two distinct branches, evaluates each child, and promotes only a correctness-passing improvement.
-- **Evaluation boundary:** `benchmark_backend/` runs a fixed remote evaluator and records the evaluated candidate snapshot and formal benchmark budget.
-- **Experience memory:** `experience_memory/` stores compact, result-bound lessons for later tasks.
-- **Optional harness evolution:** `harness_evolution/` can propose small guidance changes after a campaign and applies them only after scope, evidence, and regression gates.
-
-## Repository map
-
-| Path | Purpose |
-| --- | --- |
-| `spawn.py` | Create a task workspace from a KernelBench operator |
-| `agent_runtime/`, `campaign/` | Agent execution and bounded branch search |
-| `benchmark_backend/`, `scripts/benchmark_adapter.py` | Benchmark transport and KernelBench adapter |
-| `experience_memory/`, `harness_evolution/` | Cross-task lessons and gated harness proposals |
-| `templates/` | Files copied into a new task workspace |
-| `tests/` | Local contract and regression tests |
+- `spawn.py` creates a task workspace from a KernelBench operator; `templates/` provides its starting files.
+- `agent_runtime/` starts Codex or Claude Code in that workspace.
+- `benchmark_backend/` and `scripts/benchmark_adapter.py` evaluate candidates on the GPU host and save the exact file that was measured.
+- `campaign/` explores two branches per round and promotes a candidate after it passes correctness and improves latency.
+- `experience_memory/` saves lessons tied to results. `harness_evolution/` checks optional changes to task guidance against evidence and regression tests.
+- `tests/` covers the local contracts and regression checks.
 
 ## Quick start
 
-Use WSL with Python 3.10 or newer, a native Codex CLI, OpenSSH, a KernelBench checkout, and an SSH-accessible GPU machine with KernelBench and PyTorch installed. GPU evaluation requires your own remote environment.
+Run the control process in WSL with Python 3.10+, a native Codex CLI, and OpenSSH. The GPU host needs PyTorch, KernelBench, and a matching KernelPilot checkout; see the [installation guide](docs/installation.md) for setup details.
 
 ```bash
 git clone https://github.com/pai3021/KernelPilot.git
@@ -56,9 +44,9 @@ python3 spawn.py \
   --remote-config configs/remote.local.toml --name demo
 ```
 
-The command prints the child workspace path. Enter it, read `CODEX_TASK.md`, and start `codex`. Use `bash scripts/bench.sh --label "first candidate"` to evaluate a candidate. Keep your local SSH configuration and remote paths out of Git. `KERNELPILOT_REMOTE_CONFIG` can supply the config path for scripted spawns.
+`spawn.py` prints the child workspace path. Enter it, read `CODEX_TASK.md`, and run `codex`. After editing the kernel, run `bash scripts/bench.sh --label "candidate-1"` from the child workspace.
 
-The remote host must contain the repository's evaluator code and a compatible KernelBench checkout. See [setup details](docs/installation.md) before a GPU run. For a local, GPU-free check of the repository contracts:
+For a local check that does not need a GPU:
 
 ```bash
 python3 -m unittest discover -s tests -q
@@ -66,7 +54,7 @@ python3 -m unittest discover -s tests -q
 
 ## Recorded SSH example
 
-A Codex agent optimized KernelBench Level 1 `91_cumsum_reverse` with a [Triton reverse-scan kernel](examples/kernelbench_reverse_cumsum_triton.py). It combines the reference's flip, cumulative sum, and flip operations into one kernel. A recorded SSH evaluation on an NVIDIA GeForce RTX 4090 produced:
+For KernelBench Level 1 `91_cumsum_reverse`, Codex generated a [Triton reverse-scan kernel](examples/kernelbench_reverse_cumsum_triton.py). It reads each row backward and computes the scan in one kernel; the reference uses two flips around `torch.cumsum`. The recorded SSH run used an NVIDIA GeForce RTX 4090.
 
 | Check | Recorded result |
 | --- | --- |
@@ -77,12 +65,12 @@ A Codex agent optimized KernelBench Level 1 `91_cumsum_reverse` with a [Triton r
 | Timing | 20 CUDA-event trials |
 | Evaluated candidate | SHA-256 `8acc4ec88b8cb56d5516775db4b9c7cef1b516487b70b2b1da4114a2fd8ecde2` |
 
-To reproduce the task, use the `91_cumsum_reverse` quick-start command above, copy the example to the generated child's `solution/kernel.py`, set `language = "triton"` under `[build]` in `config.toml`, then run `bash scripts/bench.sh --label "reverse-cumsum"`.
+To rerun it, use the `91_cumsum_reverse` quick-start command, copy the example to the child's `solution/kernel.py`, set `language = "triton"` under `[build]` in `config.toml`, and run `bash scripts/bench.sh --label "reverse-cumsum"`.
 
-## Evaluation scope
+## Evaluation
 
-KernelPilot records correctness, latency, candidate identity, and benchmark budget for each formal evaluation. See [evaluation notes](docs/evaluation.md) for the release evidence boundary.
+Each run records correctness, latency, trial counts, and the hash of the evaluated file. See [evaluation notes](docs/evaluation.md) for the measurement details.
 
 ## License and credits
 
-Released under the [MIT license](LICENSE). See [third-party notices](THIRD_PARTY_NOTICES.md) for source attribution. KernelBench, Codex, Claude Code, and GPU tooling are separate projects with their own terms.
+Released under the [MIT license](LICENSE). See [third-party notices](THIRD_PARTY_NOTICES.md) for source attribution.
