@@ -1,0 +1,4 @@
+[build]
+language = "triton"
+entry_point = "kernel.py::run"
+destination_passing_style = false

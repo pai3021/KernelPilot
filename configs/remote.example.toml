@@ -1,0 +1,13 @@
+# Copy to remote.local.toml and replace every path with your own remote setup.
+# This file contains no credentials. Use an SSH host alias from ~/.ssh/config.
+[benchmark.remote]
+host = "gpu-host"
+remote_repo = "/path/to/KernelPilot"
+python = "/path/to/python"
+kernelbench = "/path/to/KernelBench"
+runs_dir = "/path/to/kernelpilot-runs"
+evaluation_timeout = 300
+
+# Optional diagnostics, if installed on the remote host:
+# compute_sanitizer = "/path/to/compute-sanitizer"
+# nsys = "/path/to/nsys"

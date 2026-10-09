@@ -1,0 +1,6 @@
+[self_evolution]
+# Advanced capability. Set false for the conservative Phase 1–3-only path.
+enabled = true
+runtime = "codex"
+after_campaign = true
+max_proposals = 1

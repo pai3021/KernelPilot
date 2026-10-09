@@ -1,0 +1,18 @@
+{
+  "candidate_blob": "{\"author\": \"phase1a-smoke\", \"build\": {\"entry_point\": \"kernel.py::run\", \"language\": \"python\"}, \"definition\": \"1_Square_matrix_multiplication_\", \"format\": \"ako4x-kernelbench-v1\", \"name\": \"phase1a-reference-equivalent\", \"sources\": {\"kernel.py\": \"class ModelNew(Model):\\n    pass\\n\"}}",
+  "task_ids": ["level1/1_Square_matrix_multiplication_"],
+  "params": {
+    "correct_trials": 3,
+    "perf_trials": 20,
+    "timing_method": "cuda_event",
+    "device": "cuda:0"
+  },
+  "capture_logs": true,
+  "kernelbench_path": "/srv/KernelBench",
+  "metadata": {
+    "backend": "ssh",
+    "physical_gpu_id": 1,
+    "visible_device": "cuda:0",
+    "run_id": "ep-phase1a-reference-manual"
+  }
+}

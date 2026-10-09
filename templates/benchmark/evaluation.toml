@@ -1,0 +1,20 @@
+[default]
+# KernelBench local evaluator. Select the physical GPU through
+# CUDA_VISIBLE_DEVICES; device is the ordinal inside that visible set.
+baseline_iterations = 5
+solution_iterations = 20
+num_trials = 1
+warmup_runs = 3
+timeout_seconds = 300
+use_isolated_runner = true
+atol = 0.0001
+rtol = 0.0001
+required_matched_ratio = 1.0
+
+# Adapter options passed through benchmark-agnostic bench_utils.
+benchmark = "kernelbench"
+task = "1_Square_matrix_multiplication_"
+correct_trials = 3
+perf_trials = 20
+timing_method = "cuda_event"
+device = "cuda:0"
