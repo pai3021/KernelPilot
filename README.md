@@ -8,16 +8,7 @@ The current workflow targets [KernelBench](https://github.com/ScalingIntelligenc
 
 KernelPilot turns a benchmark task into an isolated workspace where a coding agent can develop a GPU kernel. Each evaluation checks correctness before measuring latency and records the exact candidate that was tested. The local WSL process manages the workspace; in the documented SSH setup, a remote GPU host runs the benchmark.
 
-```mermaid
-flowchart LR
-    task["KernelBench task"] --> spawn["spawn.py<br/>isolated workspace"]
-    spawn --> agent["Coding agent<br/>candidate kernel"]
-    agent --> bench["GPU benchmark<br/>correctness, then latency"]
-    bench --> result["Result + candidate snapshot"]
-    result -. "revise candidate" .-> agent
-    result -. "optional campaign" .-> parent["Select passing improvement"]
-    parent -. "next round" .-> spawn
-```
+![KernelPilot system overview showing the optimization loop, local control, and remote GPU evaluation](docs/images/kernelpilot-system-overview.png)
 
 You can drive one workspace manually, as in the quick start below. For longer searches, the optional [closed-loop campaign](docs/closed-loop.md) creates fresh workspaces across rounds and carries forward a passing improvement.
 
