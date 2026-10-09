@@ -8,9 +8,9 @@ The current workflow targets [KernelBench](https://github.com/ScalingIntelligenc
 
 KernelPilot supports a manual single-task workflow and an optional multi-round campaign. The diagram shows the campaign: a master agent selects a parent kernel, spawns an isolated child workspace, and drives a sub agent to optimize and evaluate candidates. Archived variants can seed later rounds.
 
-![KernelPilot architecture showing the master and sub agent loop, generic agent substrate, and kernel-specific harness](docs/images/kernelpilot-system-overview.png)
+![KernelPilot architecture showing the master/sub loop, agent adapters, cross-session archive, and optional harness proposals](docs/images/kernelpilot-system-overview.png)
 
-The sub agent uses two layers: **(a) Generic Agent Substrate** supplies the agent loop, context management, and tool use through Codex or Claude Code; **(b) Kernel-Specific Harness** supplies KernelPilot's task template, benchmark adapter, reference archive, and skills for benchmarking, profiling, sanitization, and kernel languages.
+The sub agent uses two layers. **(a) Generic Agent Substrate** supplies the agent loop, context management, and tool use. Codex and Claude Code have runtime adapters today; other agents can be added through the same adapter interface. **(b) Kernel-Specific Harness** supplies the task template, benchmark adapter, reference archive (variants and lessons across sessions), and skill catalog. Optional harness proposals are reviewed against scope, evidence, and regression checks before a guidance change is applied.
 
 The [quick start](#quick-start) follows the manual path: you drive one child workspace directly and evaluate over SSH on a GPU host. See [closed-loop campaigns](docs/closed-loop.md) for the optional master/sub workflow.
 
@@ -20,7 +20,7 @@ The [quick start](#quick-start) follows the manual path: you drive one child wor
 - **Isolated search:** `campaign/` plans two distinct branches, evaluates each child, and promotes only a correctness-passing improvement.
 - **Evaluation boundary:** `benchmark_backend/` runs a fixed remote evaluator and records the evaluated candidate snapshot and formal benchmark budget.
 - **Experience memory:** `experience_memory/` stores compact, result-bound lessons for later tasks.
-- **Harness proposals:** `harness_evolution/` reviews proposed changes through a scoped gate. It is optional.
+- **Optional harness evolution:** `harness_evolution/` can propose small guidance changes after a campaign and applies them only after scope, evidence, and regression gates.
 
 The original single-workspace and closed-loop commands remain in the repository. The documented starting path below is the KernelBench + Codex + SSH workflow.
 
