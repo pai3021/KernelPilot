@@ -4,6 +4,23 @@ KernelPilot is a personal GPU kernel optimization project. It gives a coding age
 
 The current workflow targets [KernelBench](https://github.com/ScalingIntelligence/KernelBench) tasks. A local WSL control process runs the agent; a remote GPU host performs correctness and latency evaluation over SSH. This is an experimental harness, not a hosted service.
 
+## System overview
+
+KernelPilot turns a benchmark task into an isolated workspace where a coding agent can develop a GPU kernel. Each evaluation checks correctness before measuring latency and records the exact candidate that was tested. The local WSL process manages the workspace; in the documented SSH setup, a remote GPU host runs the benchmark.
+
+```mermaid
+flowchart LR
+    task["KernelBench task"] --> spawn["spawn.py<br/>isolated workspace"]
+    spawn --> agent["Coding agent<br/>candidate kernel"]
+    agent --> bench["GPU benchmark<br/>correctness, then latency"]
+    bench --> result["Result + candidate snapshot"]
+    result -. "revise candidate" .-> agent
+    result -. "optional campaign" .-> parent["Select passing improvement"]
+    parent -. "next round" .-> spawn
+```
+
+You can drive one workspace manually, as in the quick start below. For longer searches, the optional [closed-loop campaign](docs/closed-loop.md) creates fresh workspaces across rounds and carries forward a passing improvement.
+
 ## What is implemented
 
 - **Agent runtimes:** Codex and Claude Code share a task contract and workspace setup through `agent_runtime/`.
