@@ -52,19 +52,17 @@ The remote host must contain the repository's evaluator code and a compatible Ke
 python3 -m unittest discover -s tests -q
 ```
 
-## Recorded example
+## Recorded SSH example
 
-One recorded KernelBench Level 1 run optimized `14_Matmul_for_upper_triangular_matrices` on 4096 x 4096 inputs. In a two-round search, the selected branch used a 2 x 2 block decomposition to skip the known-zero part of the upper-triangular product.
+A smoke run used the bundled [Triton matrix multiplication candidate](tests/fixtures/kernelbench_matmul_triton.py) for KernelBench Level 1 `1_Square_matrix_multiplication_` (4096 x 4096) through the SSH evaluator on an NVIDIA GeForce RTX 4090.
 
 | Check | Recorded result |
 | --- | --- |
-| GPU | NVIDIA GeForce RTX 4090 |
-| Correctness | PASS |
-| Reference / selected candidate | 2.45 ms / 1.34 ms (1.83x) |
-| Formal GPU evaluations | 4 |
+| Correctness | PASSED (3 trials) |
+| Timing | 20 CUDA-event trials |
+| Evaluated candidate | SHA-256 `c90eaefff2d5fc8240346e0649a8ec1f3cc86b0bf2ef6cbcc5a8f8f6dc70977b` |
 
-The SSH evaluator used CUDA event timing. The selected evaluated candidate has SHA-256 `d6a10aa1d490d32fcc4468a36f02fb983ee790f40e97151af4218b4df2bedc68`.
-
+For a manually written Triton candidate, set `language = "triton"` under `[build]` in the generated task's `config.toml` before running `scripts/bench.sh`.
 ## Evaluation scope
 
 KernelPilot records correctness, latency, candidate identity, and benchmark budget for each formal evaluation. See [evaluation notes](docs/evaluation.md) for the release evidence boundary. This README makes no aggregate speedup claim.
