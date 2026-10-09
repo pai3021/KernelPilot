@@ -8,7 +8,9 @@ The current workflow targets [KernelBench](https://github.com/ScalingIntelligenc
 
 KernelPilot turns a benchmark task into an isolated workspace where a coding agent can develop a GPU kernel. Each evaluation checks correctness before measuring latency and records the exact candidate that was tested. The local WSL process manages the workspace; in the documented SSH setup, a remote GPU host runs the benchmark.
 
-![KernelPilot system overview showing the optimization loop, local control, and remote GPU evaluation](docs/images/kernelpilot-system-overview.png)
+![KernelPilot system overview showing the optimization loop, generic agent substrate, and KernelPilot harness](docs/images/kernelpilot-system-overview.png)
+
+Layer **(a)** is the selected coding agent's loop, context management, and tool use. Layer **(b)** is the KernelPilot harness: task templates, benchmark adapter, reference archive, and kernel-specific skills.
 
 You can drive one workspace manually, as in the quick start below. For longer searches, the optional [closed-loop campaign](docs/closed-loop.md) creates fresh workspaces across rounds and carries forward a passing improvement.
 
