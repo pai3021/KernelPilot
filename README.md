@@ -6,13 +6,13 @@ The current workflow targets [KernelBench](https://github.com/ScalingIntelligenc
 
 ## System overview
 
-KernelPilot turns a benchmark task into an isolated workspace where a coding agent can develop a GPU kernel. Each evaluation checks correctness before measuring latency and records the exact candidate that was tested. The local WSL process manages the workspace; in the documented SSH setup, a remote GPU host runs the benchmark.
+KernelPilot supports a manual single-task workflow and an optional multi-round campaign. The diagram shows the campaign: a master agent selects a parent kernel, spawns an isolated child workspace, and drives a sub agent to optimize and evaluate candidates. Archived variants can seed later rounds.
 
-![KernelPilot system overview showing the optimization loop, generic agent substrate, and KernelPilot harness](docs/images/kernelpilot-system-overview.png)
+![KernelPilot architecture showing the master and sub agent loop, generic agent substrate, and kernel-specific harness](docs/images/kernelpilot-system-overview.png)
 
-Layer **(a)** is the selected coding agent's loop, context management, and tool use. Layer **(b)** is the KernelPilot harness: task templates, benchmark adapter, reference archive, and kernel-specific skills.
+The sub agent uses two layers: **(a) Generic Agent Substrate** supplies the agent loop, context management, and tool use through Codex or Claude Code; **(b) Kernel-Specific Harness** supplies KernelPilot's task template, benchmark adapter, reference archive, and skills for benchmarking, profiling, sanitization, and kernel languages.
 
-You can drive one workspace manually, as in the quick start below. For longer searches, the optional [closed-loop campaign](docs/closed-loop.md) creates fresh workspaces across rounds and carries forward a passing improvement.
+The [quick start](#quick-start) follows the manual path: you drive one child workspace directly and evaluate over SSH on a GPU host. See [closed-loop campaigns](docs/closed-loop.md) for the optional master/sub workflow.
 
 ## What is implemented
 
