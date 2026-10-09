@@ -2,7 +2,9 @@
 
 KernelPilot is a personal GPU kernel optimization project. It gives a coding agent an isolated task workspace, checks candidates with a fixed benchmark, and uses the results to guide the next attempt.
 
-The current workflow targets [KernelBench](https://github.com/ScalingIntelligence/KernelBench) tasks. A local WSL control process runs the agent; a remote GPU host performs correctness and latency evaluation over SSH. This is an experimental harness, not a hosted service.
+The current workflow targets [KernelBench](https://github.com/ScalingIntelligence/KernelBench) tasks. A local WSL control process runs the agent; a remote GPU host performs correctness and latency evaluation over SSH.
+
+In one recorded RTX 4090 task, a Codex-generated Triton reverse scan reduced KernelBench `91_cumsum_reverse` latency from 30.7 ms to 9.84 ms (**3.12×**). [See the example](#recorded-ssh-example).
 
 ## System overview
 
@@ -21,8 +23,6 @@ The [quick start](#quick-start) follows the manual path: you drive one child wor
 - **Evaluation boundary:** `benchmark_backend/` runs a fixed remote evaluator and records the evaluated candidate snapshot and formal benchmark budget.
 - **Experience memory:** `experience_memory/` stores compact, result-bound lessons for later tasks.
 - **Optional harness evolution:** `harness_evolution/` can propose small guidance changes after a campaign and applies them only after scope, evidence, and regression gates.
-
-The original single-workspace and closed-loop commands remain in the repository. The documented starting path below is the KernelBench + Codex + SSH workflow.
 
 ## Repository map
 
@@ -43,13 +43,15 @@ Use WSL with Python 3.10 or newer, a native Codex CLI, OpenSSH, a KernelBench ch
 git clone https://github.com/pai3021/KernelPilot.git
 cd KernelPilot
 python3 -m pip install -e '.[kernelbench]'
+git clone https://github.com/ScalingIntelligence/KernelBench.git ../KernelBench
+git -C ../KernelBench checkout 423217d
 cp configs/remote.example.toml configs/remote.local.toml
 # Edit configs/remote.local.toml for your SSH host and remote paths.
 
-python3 spawn.py --dataset /path/to/KernelBench
+python3 spawn.py --dataset ../KernelBench
 python3 spawn.py \
   --operator 91_cumsum_reverse \
-  --dataset /path/to/KernelBench \
+  --dataset ../KernelBench \
   --backend ssh --gpu rtx4090 --agent codex \
   --remote-config configs/remote.local.toml --name demo
 ```
@@ -79,7 +81,7 @@ To reproduce the task, use the `91_cumsum_reverse` quick-start command above, co
 
 ## Evaluation scope
 
-KernelPilot records correctness, latency, candidate identity, and benchmark budget for each formal evaluation. See [evaluation notes](docs/evaluation.md) for the release evidence boundary. This README makes no aggregate speedup claim.
+KernelPilot records correctness, latency, candidate identity, and benchmark budget for each formal evaluation. See [evaluation notes](docs/evaluation.md) for the release evidence boundary.
 
 ## License and credits
 

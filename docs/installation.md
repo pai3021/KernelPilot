@@ -14,9 +14,11 @@ Copy `configs/remote.example.toml` to the ignored `configs/remote.local.toml`. R
 The config file is read by the parent `spawn.py` and written into each child's `config.toml`. To list tasks and create a workspace:
 
 ```bash
-python3 spawn.py --dataset /path/to/KernelBench
-python3 spawn.py --operator 1_Square_matrix_multiplication_ \
-  --dataset /path/to/KernelBench --backend ssh --gpu rtx4090 \
+git clone https://github.com/ScalingIntelligence/KernelBench.git ../KernelBench
+git -C ../KernelBench checkout 423217d
+python3 spawn.py --dataset ../KernelBench
+python3 spawn.py --operator 91_cumsum_reverse \
+  --dataset ../KernelBench --backend ssh --gpu rtx4090 \
   --agent codex --remote-config configs/remote.local.toml --name demo
 ```
 
