@@ -15,7 +15,7 @@ from typing import Any, Mapping, Sequence
 from .base import BenchmarkBackend, BenchmarkExecutionResult, ExecutionStatus, failure_results
 
 
-_ALLOWED_GPUS = frozenset({0, 1, 2, 3, 5})
+_RESERVED_GPUS = frozenset({4})
 _TRANSFER_TIMEOUT_SECONDS = 90
 _TRANSFER_ATTEMPTS = 2
 _PREFLIGHT_ATTEMPTS = 2
@@ -60,10 +60,10 @@ class RemoteSSHConfig:
 
         raw_gpu = values.get("preferred_gpu", values.get("gpu"))
         gpu = None if raw_gpu in (None, "") else int(raw_gpu)
-        if gpu == 4:
+        if gpu in _RESERVED_GPUS:
             raise ValueError("Physical GPU 4 is reserved and cannot be configured")
-        if gpu is not None and gpu not in _ALLOWED_GPUS:
-            raise ValueError(f"preferred_gpu must be one of {sorted(_ALLOWED_GPUS)}, got {gpu}")
+        if gpu is not None and gpu < 0:
+            raise ValueError("preferred_gpu must be non-negative")
         timeout = int(values.get("evaluation_timeout", values.get("timeout_seconds", 300)))
         if timeout < 1:
             raise ValueError("evaluation_timeout must be positive")
@@ -177,9 +177,9 @@ class RemoteSSHBenchmarkBackend(BenchmarkBackend):
             except ValueError:
                 continue
         by_id = {gpu: (memory, utilization) for gpu, memory, utilization in rows}
-        candidates = [self.config.preferred_gpu] if self.config.preferred_gpu is not None else sorted(_ALLOWED_GPUS)
+        candidates = [self.config.preferred_gpu] if self.config.preferred_gpu is not None else sorted(by_id)
         for gpu in candidates:
-            if gpu not in _ALLOWED_GPUS:
+            if gpu in _RESERVED_GPUS or gpu < 0:
                 continue
             state = by_id.get(gpu)
             if state and state[0] <= self.config.max_gpu_memory_mb and state[1] == 0:
@@ -189,7 +189,7 @@ class RemoteSSHBenchmarkBackend(BenchmarkBackend):
             state = by_id.get(requested)
             detail = "not reported" if state is None else f"memory={state[0]} MiB util={state[1]}%"
             raise RuntimeError(f"Preferred GPU {requested} is unavailable ({detail})")
-        raise RuntimeError(f"No idle allowed GPU found in {sorted(_ALLOWED_GPUS)}; GPU 4 is reserved")
+        raise RuntimeError("No idle GPU found; GPU 4 is reserved")
 
     def _preflight(self, physical_gpu: int) -> dict[str, Any]:
         """Check only the execution prerequisites before candidate transfer."""

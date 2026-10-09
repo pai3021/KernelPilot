@@ -1,41 +1,40 @@
-> Optional benchmark porting guide. For the KernelBench + SSH starting path, see [README](../README.md).
+> FlashInfer-Bench adapter reference. For the current KernelBench + SSH starting path, see [README](../README.md).
 
-# Porting AKO4X to a different benchmark
+# Benchmark porting reference
 
-AKO4X ships wired to **FlashInfer-Bench** as its default benchmark, but the
-benchmark is a swappable component (that's the **X**). This is the complete
-checklist for pointing AKO4X at a different benchmark. It's written to be
-followed end-to-end by a coding agent (or a human) in one pass.
+This guide records the swappable benchmark contract used by the FlashInfer-Bench
+path. KernelPilot already includes a KernelBench adapter; the steps below remain
+reference material for adapting that contract to another benchmark.
 
 If you only want the short version: **rewrite one file** (`scripts/benchmark_adapter.py`)
 so its plain-data functions resolve to your benchmark, rewrite the `benchmark`
 skill and `evaluation.toml`, swap the dependency. The rest of this page is the
 detail behind that.
 
-## Design philosophy: ports adapt to AKO, not the other way around
+## Design philosophy: adapt at the boundary
 
 A few principles that shape the rest of this guide:
 
-- **The contract is FIB-derived by origin.** AKO grew up around FlashInfer-Bench,
+- **The contract is FIB-derived by origin.** The original adapter grew around FlashInfer-Bench,
   and the contract carries that history: `definition` / `workload` / `uuid` /
   `axes` vocabulary, a `STATUS_PASSED = "PASSED"` string literal, a
   `{definition: {uuid: {...}}}` normalized result shape, FIB's Trace-envelope as
   the on-disk `workloads.jsonl` form, a handful of hardcoded values in
-  `bench_utils.py`. We don't pretend otherwise.
+  `bench_utils.py`.
 
 - **Ports adapt to the contract, not the other way around.** A port usually
   lands in two places: rewrite `scripts/benchmark_adapter.py` to resolve to
   your benchmark's runtime, and — if your dataset layout differs from
   `definitions/<cat>/<op>.json` + `workloads/<cat>/<op>.jsonl` — write a
   spawn-time transform on the `spawn.py` side that materializes a synthetic
-  AKO-shaped tree from your native layout. For example, porting to a
+  normalized definitions/workloads tree from your native layout. For example, porting to a
   flat-pyfile benchmark like KernelBench (each operator a standalone `.py`
   module under `level<N>/`) would translate to ~80 lines in `spawn.py` that
   materialize a synthetic `definitions/level<N>/<op>.json` +
   `workloads/level<N>/<op>.jsonl` tree from the source — runs in ~1s at spawn,
   leaves the rest of the harness untouched.
 
-- **This is deliberate.** Rebuilding AKO around a benchmark-neutral data model
+- **This is deliberate.** Rebuilding the harness around a benchmark-neutral data model
   would multiply the surface to maintain (a neutral type layer plus N adapters)
   without removing the underlying assumptions — FIB-shaped scoring semantics,
   baseline-freshness logic, the per-uuid result lookup in
@@ -300,7 +299,7 @@ copied into children).
 layout doesn't match `definitions/<cat>/<op>.json` + `workloads/<cat>/<op>.jsonl`,
 the clean fix is **not** to thread shape-translation through
 `benchmark_adapter.py` (which would entangle the adapter with two layouts).
-Instead, materialize a synthetic AKO-shaped tree at spawn time from your
+Instead, materialize a synthetic definitions/workloads tree at spawn time from your
 native source. Worked sketch — porting to KernelBench (flat
 `<repo>/KernelBench/level<N>/<problem>.py` tree): add an
 `ensure_dataset_synth()` helper in `spawn.py` that reads the flat source tree
@@ -308,7 +307,7 @@ and writes a synthetic
 `<cache>/definitions/level<N>/<op>.json` + `<cache>/workloads/level<N>/<op>.jsonl`
 under a cache dir alongside `spawn.py`, then have `resolve_dataset` return
 that cache root. Downstream consumers (`list_operators` / `discover_operator` /
-`bench_utils._load_workloads` / the adapter) all see the AKO shape; the native
+`bench_utils._load_workloads` / the adapter) all see the normalized harness shape; the native
 shape stays at the spawn-time boundary. ~80 lines, ~1s at spawn, idempotent
 (rebuild only when the source file-count changes).
 
@@ -330,8 +329,8 @@ to the child. The envelope shape is an implicit contract between spawn-time
 output and bench_utils' reader; porting.md doesn't document it elsewhere.
 
 **Treat the dataset path as read-only.** Any synthetic shim data you generate
-(e.g. emitting AKO-shaped definitions / workloads from a flat-pyfile benchmark
-like KernelBench) should live under the AKO repo root or an explicit cache dir,
+(e.g. emitting normalized definitions / workloads from a flat-pyfile benchmark
+like KernelBench) should live under the project repo root or an explicit cache dir,
 not under the benchmark's source tree.
 
 ### 5. Update `pyproject.toml`

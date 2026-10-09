@@ -46,6 +46,17 @@ class BackendContractTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "reserved"):
             RemoteSSHConfig.from_mapping(remote_config(preferred_gpu=4))
 
+    def test_preferred_gpu_accepts_non_reserved_device(self):
+        configured = RemoteSSHConfig.from_mapping(remote_config(preferred_gpu=7))
+        self.assertEqual(configured.preferred_gpu, 7)
+
+    def test_auto_selects_idle_gpu_from_remote_inventory(self):
+        backend = RemoteSSHBenchmarkBackend(remote_config(preferred_gpu=None))
+        backend._ssh = lambda command, *, timeout: subprocess.CompletedProcess(
+            [], 0, "4, 0, 0\n5, 1600, 48\n7, 12, 0\n", ""
+        )
+        self.assertEqual(backend._select_gpu(), 7)
+
     def test_remote_compute_sanitizer_path_is_configurable(self):
         default = RemoteSSHConfig.from_mapping(remote_config())
         self.assertEqual(default.remote_compute_sanitizer, "")

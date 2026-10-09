@@ -1,4 +1,4 @@
-"""Thin IO layer for the AKO4X closed-loop master agent.
+"""Thin IO layer for the KernelPilot closed-loop master agent.
 
 This file is intentionally NOT where decisions live. The master CC makes
 accept / reject / archive / quarantine decisions in its prompt; master.py
@@ -10,8 +10,8 @@ Functions, see MASTER.md for round-flow context:
   init_campaign(...)             — Round-0 archive setup (idempotent)
   read_campaign_mode(...)        — read locked mode (2 or 3) from baseline.json
   spawn_child(...)               — derive a child env via spawn.py
-  run_sub_phase1(...)            — drive sub through phase-1 (claude --print)
-  send_retrospective_prompt(...) — drive sub through phase-2 (claude --resume; Mode 3 only)
+  run_sub_phase1(...)            — drive sub through phase-1 (selected agent runtime)
+  send_retrospective_prompt(...) — drive sub through phase-2 (selected agent runtime; Mode 3 only)
   archive_variant(...)           — land a successful variant under reference/<family>/
   archive_failed(...)            — land a crash/timeout transcript under reference/<family>/_failed/
   append_ledger(...)             — append one line to harness-ledger.md
@@ -38,8 +38,8 @@ from agent_runtime import AgentRunRequest, AgentSession, RuntimeRegistry
 import agent_runtime.claude  # noqa: F401 - registers the Phase 1C Claude runtime
 import agent_runtime.codex  # noqa: F401 - registers the Phase 1D Codex runtime
 
-PKG_DIR = Path(__file__).resolve().parent  # AKO4X/master/
-ROOT = PKG_DIR.parent                      # AKO4X/
+PKG_DIR = Path(__file__).resolve().parent  # KernelPilot/master/
+ROOT = PKG_DIR.parent                      # KernelPilot/
 
 
 # ── Data classes ─────────────────────────────────────────────────────────

@@ -1,6 +1,8 @@
-# MASTER — AKO4X closed-loop master agent
+# MASTER — KernelPilot closed-loop master agent
 
-You are the **master agent** for an AKO4X closed-loop campaign. A campaign = N rounds of optimization on a single fixed `<family>`, `<gpu>`, `<backend>`, and `<mode>` (all four locked at session start from the user's initial prompt — see Round 0). Each round you derive a child env, drive a sub agent through phase-1 (kernel optimization), and — **in Mode 3 only** — through phase-2 (harness retrospective) whose proposals you then evidence-gate and apply / reject. In **Mode 2** (default) the harness is held static: you archive variants and maintain `reference/<family>/` but never edit `templates/` / `scripts/` / `master/`, and there is no phase-2 / proposal channel at all.
+> Optional multi-round campaign protocol. For the documented KernelBench + SSH single-task path, see [README](../README.md).
+
+You are the **master agent** for a KernelPilot closed-loop campaign. A campaign = N rounds of optimization on a single fixed `<family>`, `<gpu>`, `<backend>`, and `<mode>` (all four locked at session start from the user's initial prompt — see Round 0). Each round you derive a child env, drive a sub agent through phase-1 (kernel optimization), and — **in Mode 3 only** — through phase-2 (harness retrospective) whose proposals you then evidence-gate and apply / reject. In **Mode 2** (default) the harness is held static: you archive variants and maintain `reference/<family>/` but never edit `templates/` / `scripts/` / `master/`, and there is no phase-2 / proposal channel at all.
 
 **You do NOT optimize kernels. You orchestrate.**
 
@@ -106,7 +108,7 @@ From here gpu/backend/mode live solely in the seeded `baseline.json`'s `environm
      - clean round: `YYYY-MM-DD round-N <variant-name-or-no-change> (mode-2; no-proposals-solicited; kernel_changed=<T|F>; archived=<T|F>)`
      - phase-1 failure: `YYYY-MM-DD round-N - (mode-2; phase1-<crash|timeout>: <reason>)`
    - If round failed (crash/timeout), `master.archive_failed(child_dir, round_id, family, exit_kind=..., last_action=..., last_stderr_tail=...)` — pass the round label (= step-2 `name_label`) as `round_id`, producing `_failed/<round-label>/{phase1-transcript.jsonl,git-diff.patch,ITERATIONS.md,summary.md}`. Use `SubResult.stderr_tail` as `last_stderr_tail`. Fill summary.md `cited_skills` and `top_frame` fields by reading the transcript yourself (master.py provides scaffold + mechanical fields only). **[Both modes.]**
-10. **Commit** in your cwd (the AKO4X repo root). Message format: `round-<N> family=<X>: <accepted edits + archived variant + maintenance>`. In Mode 2 the "accepted edits" portion is empty and the diff should touch only `reference/<family>/...` + `master/harness-ledger.md` — any change to `templates/` / `scripts/` / `master/master.py` etc. in a Mode-2 round is a bug.
+10. **Commit** in your cwd (the KernelPilot repo root). Message format: `round-<N> family=<X>: <accepted edits + archived variant + maintenance>`. In Mode 2 the "accepted edits" portion is empty and the diff should touch only `reference/<family>/...` + `master/harness-ledger.md` — any change to `templates/` / `scripts/` / `master/master.py` etc. in a Mode-2 round is a bug.
 
 ## Phase-1 prompt construction
 

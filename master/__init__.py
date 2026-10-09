@@ -1,7 +1,7 @@
-"""AKO4X closed-loop master agent package.
+"""KernelPilot closed-loop master agent package.
 
 Re-exports the IO layer from `master.master` so `import master` and
-`master.spawn_child(...)` work unchanged when called from the AKO4X
+`master.spawn_child(...)` work unchanged when called from the KernelPilot
 repo root (which is the master CC's cwd).
 
 See MASTER.md for the round-flow protocol.

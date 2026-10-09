@@ -1,10 +1,10 @@
-> Legacy AKO4X guide. For the KernelPilot KernelBench entry path, see [installation](installation.md).
+> FlashInfer-Bench troubleshooting notes. For the KernelPilot KernelBench + SSH path, see [installation](installation.md).
 
 # Troubleshooting
 
-> **Note**: This page documents issues with the **default benchmark (flashinfer-bench)**. If you've swapped benchmarks via [Porting](porting.md), see your benchmark's docs for its specific issues.
+> **Note**: This page documents issues with the **optional FlashInfer-Bench path**. If you've swapped benchmarks via [Porting](porting.md), see your benchmark's docs for its specific issues.
 
-## flashinfer-bench (default benchmark)
+## FlashInfer-Bench
 
 ### CUPTI Driver Mismatch
 

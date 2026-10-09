@@ -13,7 +13,7 @@ run-on paragraph in a markdown preview. The logical content of one entry:
 ```
 
 - **edit-id**: short stable handle, e.g. `bench-modes-add-warmup` or `task-md-clarify-prior-block`.
-- **scope**: file path that the edit touches (relative to AKO4X root). E.g. `templates/skills/bench/SKILL.md` or `scripts/run_local.py`.
+- **scope**: file path that the edit touches (relative to the repository root). E.g. `templates/skills/bench/SKILL.md` or `scripts/run_local.py`.
 - **rationale**: 1-2 sentences. For accepted: why it's a real harness gap, not generic knowledge. For rejected: why it failed the gate.
 
 ### Mode-2 round-summary line (no proposals solicited)
