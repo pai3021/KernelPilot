@@ -48,7 +48,7 @@ cp configs/remote.example.toml configs/remote.local.toml
 
 python3 spawn.py --dataset /path/to/KernelBench
 python3 spawn.py \
-  --operator 1_Square_matrix_multiplication_ \
+  --operator 91_cumsum_reverse \
   --dataset /path/to/KernelBench \
   --backend ssh --gpu rtx4090 --agent codex \
   --remote-config configs/remote.local.toml --name demo
@@ -64,15 +64,18 @@ python3 -m unittest discover -s tests -q
 
 ## Recorded SSH example
 
-A local Codex agent produced this [Triton matrix multiplication candidate](examples/kernelbench_square_matmul_triton.py) for KernelBench Level 1 `1_Square_matrix_multiplication_` (4096 × 4096). The fixed SSH evaluator checked it on an NVIDIA GeForce RTX 4090.
+A Codex agent optimized KernelBench Level 1 `91_cumsum_reverse` with a [Triton reverse-scan kernel](examples/kernelbench_reverse_cumsum_triton.py). It combines the reference's flip, cumulative sum, and flip operations into one kernel. A recorded SSH evaluation on an NVIDIA GeForce RTX 4090 produced:
 
 | Check | Recorded result |
 | --- | --- |
 | Correctness | PASSED (3 trials) |
-| Timing budget | 20 CUDA-event trials |
-| Evaluated candidate | SHA-256 `9643bd79209c723b3f5f5e45c5f879d99712efb4c181fd267607cad55cb5cfb0` |
+| Reference latency | 30.7 ms |
+| Candidate latency | 9.84 ms |
+| Speedup on this task | 3.12× |
+| Timing | 20 CUDA-event trials |
+| Evaluated candidate | SHA-256 `8acc4ec88b8cb56d5516775db4b9c7cef1b516487b70b2b1da4114a2fd8ecde2` |
 
-To try the example, copy it to a generated child's `solution/kernel.py`, set `language = "triton"` under `[build]` in that child's `config.toml`, and run `bash scripts/bench.sh --label "example"`.
+To reproduce the task, use the `91_cumsum_reverse` quick-start command above, copy the example to the generated child's `solution/kernel.py`, set `language = "triton"` under `[build]` in `config.toml`, then run `bash scripts/bench.sh --label "reverse-cumsum"`.
 
 ## Evaluation scope
 
