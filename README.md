@@ -52,6 +52,19 @@ The remote host must contain the repository's evaluator code and a compatible Ke
 python3 -m unittest discover -s tests -q
 ```
 
+## Recorded example
+
+One recorded KernelBench Level 1 run optimized `14_Matmul_for_upper_triangular_matrices` on 4096 x 4096 inputs. In a two-round search, the selected branch used a 2 x 2 block decomposition to skip the known-zero part of the upper-triangular product.
+
+| Check | Recorded result |
+| --- | --- |
+| GPU | NVIDIA GeForce RTX 4090 |
+| Correctness | PASS |
+| Reference / selected candidate | 2.45 ms / 1.34 ms (1.83x) |
+| Formal GPU evaluations | 4 |
+
+The SSH evaluator used CUDA event timing. The selected evaluated candidate has SHA-256 `d6a10aa1d490d32fcc4468a36f02fb983ee790f40e97151af4218b4df2bedc68`.
+
 ## Evaluation scope
 
 KernelPilot records correctness, latency, candidate identity, and benchmark budget for each formal evaluation. See [evaluation notes](docs/evaluation.md) for the release evidence boundary. This README makes no aggregate speedup claim.

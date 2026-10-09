@@ -1,4 +1,4 @@
-> Legacy AKO4X guide. For the KernelPilot KernelBench entry path, see [README](../README.md).
+> Optional benchmark porting guide. For the KernelBench + SSH starting path, see [README](../README.md).
 
 # Porting AKO4X to a different benchmark
 

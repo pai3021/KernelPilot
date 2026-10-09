@@ -1,4 +1,4 @@
-> Legacy AKO4X workflow. For the KernelPilot KernelBench entry path, see [README](../README.md).
+> Optional closed-loop campaign workflow. For the KernelBench + SSH starting path, see [README](../README.md).
 
 # Closed-loop campaigns (Mode 2 & Mode 3)
 
