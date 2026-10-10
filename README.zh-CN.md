@@ -4,11 +4,11 @@
 
 KernelPilot 使用编程 Agent 优化 GPU 算子。它为每个 [KernelBench](https://github.com/ScalingIntelligence/KernelBench) 任务创建独立工作区，通过 SSH 在 GPU 主机上检查正确性、测量延迟，并保存结果，供后续迭代使用。
 
-你可以在单个工作区中直接优化算子，也可以运行多轮搜索。在多轮搜索中，主 Agent 选择一个已有实现作为起点，创建子工作区。辅 Agent 在其中修改和测试算子。通过正确性检查的候选实现会存入归档，供下一轮选用。
+你可以在单个工作区中直接优化算子，也可以运行多轮搜索。在多轮搜索中，主 Agent 选择一个已有实现作为起点，创建子工作区。辅 Agent 在其中修改和测试算子。通过正确性检查且更快的实现会成为下一轮的起点。各候选实现的评测结果也会保留下来。
 
 ![KernelPilot 架构图：主辅 Agent 循环、Agent 底座、跨轮次归档与可选的 Harness 改进提议](docs/images/kernelpilot-system-overview.png)
 
-辅 Agent 运行在 **(a) 通用 Agent 底座**上：Codex 或 Claude Code 提供 Agent 循环、上下文管理和工具调用。KernelPilot 在此基础上提供 **(b) 算子专用 Harness（Kernel-Specific Harness）**：任务模板、基准测试适配器、保存历次候选实现与经验的参考归档，以及算子开发技能。多轮搜索还可以提出对 Harness 指引的修改。这些修改需要经过证据检查和回归测试。
+辅 Agent 运行在 **(a) 通用 Agent 底座**上：Codex 或 Claude Code 提供 Agent 循环、上下文管理和工具调用。KernelPilot 在此基础上提供 **(b) 算子专用 Harness（Kernel-Specific Harness）**：任务模板、基准测试适配器、保存历次候选实现与经验的参考归档，以及算子开发技能。多轮搜索结束后，还可以选择提出 Harness 指引的修改建议。建议需要经过证据检查和回归测试。
 
 在一次有记录的 RTX 4090 测试中，Codex 生成的 Triton 算子将 `91_cumsum_reverse` 的运行时间从 30.7 ms 降至 9.84 ms，达到 **3.12× 加速**。[查看代码与测试细节](#ssh-测试实例)。
 
@@ -25,7 +25,7 @@ KernelPilot 使用编程 Agent 优化 GPU 算子。它为每个 [KernelBench](ht
 
 ## 快速开始
 
-在 WSL 中使用 Python 3.10+、原生 Codex CLI 和 OpenSSH 运行控制流程。GPU 主机需要安装 PyTorch、KernelBench，并有对应的 KernelPilot 代码。环境配置详见[安装说明](docs/installation.md)。
+在 WSL 中使用 Python 3.10+、原生 Codex CLI 和 OpenSSH 运行控制流程。GPU 主机需要安装 PyTorch、KernelBench，并检出与本地控制端相同版本的 KernelPilot。环境配置详见[安装说明](docs/installation.md)。
 
 ```bash
 git clone https://github.com/pai3021/KernelPilot.git
