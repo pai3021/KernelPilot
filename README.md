@@ -1,22 +1,20 @@
 # KernelPilot
 
-KernelPilot helps you optimize GPU kernels with a coding agent. It creates a workspace for each [KernelBench](https://github.com/ScalingIntelligence/KernelBench) task, runs correctness and latency checks on a GPU host over SSH, and keeps the results for the next attempt.
+KernelPilot helps you optimize GPU kernels with coding agents. It creates a workspace for each [KernelBench](https://github.com/ScalingIntelligence/KernelBench) task, checks correctness and latency on a GPU host over SSH, and keeps the results for later attempts.
 
-In one recorded RTX 4090 run, a Codex-generated Triton kernel cut `91_cumsum_reverse` from 30.7 ms to 9.84 ms (**3.12×**). [Code and benchmark details](#recorded-ssh-example).
-
-## System overview
-
-You can work on one task yourself or run a multi-round campaign. In a campaign, the master agent picks a parent kernel and creates a fresh child workspace. A sub agent edits and benchmarks the kernel; passing variants go into the archive for later rounds.
+Use one workspace directly or run a multi-round campaign. In a campaign, the master agent picks a parent kernel and creates a child workspace. A sub agent edits and benchmarks the kernel. Passing variants go into the archive for later rounds.
 
 ![KernelPilot architecture showing the master/sub loop, agent adapters, cross-session archive, and optional harness proposals](docs/images/kernelpilot-system-overview.png)
 
-The sub agent runs on **(a) Generic Agent Substrate**: the agent loop, context, and tools supplied by Codex or Claude Code. KernelPilot adds **(b) Kernel-Specific Harness**: a task template, benchmark adapter, reference archive with variants and lessons from earlier runs, and kernel skills. Campaigns can also propose changes to harness guidance; those changes go through evidence and regression checks.
+The sub agent runs on **(a) Generic Agent Substrate**: the agent loop, context, and tools supplied by Codex or Claude Code. KernelPilot adds **(b) Kernel-Specific Harness**: a task template, benchmark adapter, reference archive with variants and lessons from earlier runs, and kernel skills. Campaigns can also propose changes to harness guidance. Those changes go through evidence and regression checks.
+
+In one recorded RTX 4090 run, a Codex-generated Triton kernel cut `91_cumsum_reverse` from 30.7 ms to 9.84 ms (**3.12×**). [Code and benchmark details](#recorded-ssh-example).
 
 The [quick start](#quick-start) uses one child workspace. For the master/sub workflow, see [closed-loop campaigns](docs/closed-loop.md).
 
 ## In the code
 
-- `spawn.py` creates a task workspace from a KernelBench operator; `templates/` provides its starting files.
+- `spawn.py` creates a task workspace from a KernelBench operator. `templates/` provides its starting files.
 - `agent_runtime/` starts Codex or Claude Code in that workspace.
 - `benchmark_backend/` and `scripts/benchmark_adapter.py` evaluate candidates on the GPU host and save the exact file that was measured.
 - `campaign/` explores two branches per round and promotes a candidate after it passes correctness and improves latency.
@@ -25,7 +23,7 @@ The [quick start](#quick-start) uses one child workspace. For the master/sub wor
 
 ## Quick start
 
-Run the control process in WSL with Python 3.10+, a native Codex CLI, and OpenSSH. The GPU host needs PyTorch, KernelBench, and a matching KernelPilot checkout; see the [installation guide](docs/installation.md) for setup details.
+Run the control process in WSL with Python 3.10+, a native Codex CLI, and OpenSSH. The GPU host needs PyTorch, KernelBench, and a matching KernelPilot checkout. See the [installation guide](docs/installation.md) for setup details.
 
 ```bash
 git clone https://github.com/pai3021/KernelPilot.git
@@ -54,7 +52,7 @@ python3 -m unittest discover -s tests -q
 
 ## Recorded SSH example
 
-For KernelBench Level 1 `91_cumsum_reverse`, Codex generated a [Triton reverse-scan kernel](examples/kernelbench_reverse_cumsum_triton.py). It reads each row backward and computes the scan in one kernel; the reference uses two flips around `torch.cumsum`. The recorded SSH run used an NVIDIA GeForce RTX 4090.
+For KernelBench Level 1 `91_cumsum_reverse`, Codex generated a [Triton reverse-scan kernel](examples/kernelbench_reverse_cumsum_triton.py). It reads each row backward and computes the scan in one kernel. The reference uses two flips around `torch.cumsum`. The recorded SSH run used an NVIDIA GeForce RTX 4090.
 
 | Check | Recorded result |
 | --- | --- |
