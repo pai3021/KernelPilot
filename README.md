@@ -1,5 +1,7 @@
 # KernelPilot
 
+English | [简体中文](README.zh-CN.md)
+
 KernelPilot helps you optimize GPU kernels with coding agents. It creates a workspace for each [KernelBench](https://github.com/ScalingIntelligence/KernelBench) task, checks correctness and latency on a GPU host over SSH, and keeps the results for later attempts.
 
 Use one workspace directly or run a multi-round campaign. In a campaign, the master agent picks a parent kernel and creates a child workspace. A sub agent edits and benchmarks the kernel. Passing variants go into the archive for later rounds.
