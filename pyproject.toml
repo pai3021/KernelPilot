@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "kernelpilot"
 version = "0.1.0"
-description = "Personal GPU kernel optimization agent harness"
+description = "GPU kernel optimization harness for coding agents"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]

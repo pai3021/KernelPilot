@@ -5,13 +5,13 @@ description: Contract for the active KernelBench evaluator. Use when editing a c
 
 # KernelBench benchmark contract
 
-The active benchmark is KernelBench on the configured RTX 4090. The task's
+The active benchmark is KernelBench on the configured GPU. The task's
 PyTorch Model is the correctness oracle; your candidate must define ModelNew.
 
 Run the harness entrypoint from a spawned child:
 
 ~~~bash
-CUDA_VISIBLE_DEVICES=<idle GPU except 4> bash scripts/bench.sh --first 1
+bash scripts/bench.sh --first 1
 ~~~
 
 The evaluator returns correctness, reference latency, candidate latency, and

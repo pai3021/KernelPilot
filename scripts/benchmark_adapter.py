@@ -1,4 +1,4 @@
-"""KernelBench adapter: the sole benchmark-specific seam for AKO4X."""
+"""KernelBench adapter: the benchmark-specific seam for KernelPilot."""
 from __future__ import annotations
 
 import contextlib

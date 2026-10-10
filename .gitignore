@@ -5,6 +5,7 @@ __pycache__/
 
 # Spawned child environments
 ako4x-run-*/
+kernelpilot-run-*/
 ako4fib-run-*/
 
 # Retained remote-evaluator logs and isolated Phase 0.6 workspaces.

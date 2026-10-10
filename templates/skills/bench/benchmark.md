@@ -1,6 +1,6 @@
 # Benchmarking Reference
 
-How to drive the bench harness from the AKO4X shim — commands, modes, filters, output interpretation, noise methodology. The benchmark's own specifics (scoring, status enum, workload model, baseline rule, `config.toml`) live in the `benchmark` skill.
+How to use the generated workspace's benchmark commands, filters, output, and noise checks. The benchmark's own specifics (scoring, status enum, workload model, baseline rule, `config.toml`) live in the `benchmark` skill.
 
 ## Iteration Tuning
 

@@ -1,3 +1,3 @@
-"""AKO4X: Agentic Kernel Optimization for any benchmark (default: FlashInfer-Bench)."""
+"""Legacy AKO4X package namespace retained by KernelPilot."""
 
 __version__ = "0.1.0"

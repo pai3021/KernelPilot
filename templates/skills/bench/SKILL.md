@@ -5,7 +5,7 @@ description: Run performance benchmarks to get a verdict on whether a kernel cha
 
 # Bench
 
-Single source of performance verdicts on this AKO4X harness. Command entry: `bash scripts/bench.sh`. The active benchmark is flashinfer-bench — its schema, behavior, and frozen-for-comparability segments live in the `benchmark` skill.
+Run `bash scripts/bench.sh` to check kernel changes. The active benchmark contract, including correctness and timing settings, lives in the `benchmark` skill.
 
 Detailed reference: `benchmark.md`. Top-level workflow:
 

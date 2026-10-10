@@ -102,7 +102,7 @@ class TwoBranchController:
         spawn_log.write_text(completed.stdout + completed.stderr)
         if completed.returncode != 0:
             raise RuntimeError(f"child spawn failed for {branch_id}: {completed.stderr.strip() or completed.stdout.strip()}")
-        workspace = self.project_root / "artifacts" / "children" / f"ako4x-run-{label}"
+        workspace = self.project_root / "artifacts" / "children" / f"kernelpilot-run-{label}"
         if not workspace.is_dir():
             raise RuntimeError(f"spawn reported success but workspace was absent: {workspace}")
         return workspace

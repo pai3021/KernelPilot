@@ -38,7 +38,7 @@ PARENT_DIR = Path(__file__).resolve().parent
 BASE_DIR = PARENT_DIR / "artifacts" / "children"
 
 # Active benchmark's template directory under templates/ (it pairs with the
-# templates/skills/<this>/ skill slot of the same name). Porting AKO4X to a
+# templates/skills/<this>/ skill slot of the same name). Porting KernelPilot to a
 # different benchmark changes this one constant plus those template dirs and
 # the scripts/benchmark_adapter.py seam — see docs/porting.md.
 BENCHMARK_DIR = "benchmark"
@@ -539,14 +539,14 @@ def infer_language(kernel_path):
 def make_child_name(label):
     """Generate child directory name.
 
-    With label: ako4x-run-{label} (error if exists).
-    Without label: ako4x-run-{YYYYMMDD_HHMMSS}.
+    With label: kernelpilot-run-{label} (error if exists).
+    Without label: kernelpilot-run-{YYYYMMDD_HHMMSS}.
     """
     from datetime import datetime
 
     if label:
-        return f"ako4x-run-{label}"
-    return f"ako4x-run-{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        return f"kernelpilot-run-{label}"
+    return f"kernelpilot-run-{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
 
 def render_template(task_text, placeholders):
@@ -868,7 +868,7 @@ def populate_child(child_dir, *, operator, op_type, gpu, backend, kernel_path,
         shutil.copy2(PARENT_DIR / "scripts" / "run_local_profile.py", child_dir / "scripts" / "run_local_profile.py")
         shutil.copy2(PARENT_DIR / "scripts" / "run_local_sanitize.py", child_dir / "scripts" / "run_local_sanitize.py")
     elif backend == "modal":
-        # Venv-discovery prelude: AKO4X's modal CLI typically lives at
+        # Venv-discovery prelude: the Modal CLI typically lives at
         # <workspace>/.venv/bin/modal but the user shell may not have venv
         # activated. If `modal` isn't on PATH, walk up looking for a venv.
         # Idempotent — short-circuits when modal is already discoverable.
@@ -935,11 +935,11 @@ def init_git(child_dir, operator, backend):
         return
 
     try:
-        msg = f"Initial commit (spawned from AKO4X, operator={operator}, backend={backend})"
+        msg = f"Initial commit (spawned from KernelPilot, operator={operator}, backend={backend})"
         subprocess.run(["git", "init", "-q"], cwd=child_dir, check=True)
         # Set repo-local user config so commit works without global git config
-        subprocess.run(["git", "config", "user.name", "ako4x"], cwd=child_dir, check=True)
-        subprocess.run(["git", "config", "user.email", "ako4x@local"], cwd=child_dir, check=True)
+        subprocess.run(["git", "config", "user.name", "kernelpilot"], cwd=child_dir, check=True)
+        subprocess.run(["git", "config", "user.email", "kernelpilot@local"], cwd=child_dir, check=True)
         subprocess.run(["git", "add", "-A"], cwd=child_dir, check=True)
         subprocess.run(["git", "commit", "-q", "-m", msg], cwd=child_dir, check=True)
     except (subprocess.CalledProcessError, OSError) as e:

@@ -17,9 +17,9 @@ This directory holds the **shared runtime** that backs the kernel-optimization S
 
 | File | Used by SKILLs | Notes |
 |---|---|---|
-| `benchmark_adapter.py` | (all, indirectly) | **The sole `flashinfer_bench` importer** — the benchmark seam. Exposes **plain-data functions** (`run` / `pack` / `solution_meta` / `list_workloads` / `profile` / `list_ncu_options` / `sanitize` / `cheat_check`): only `str`/`list`/`dict` cross it, no benchmark types. Holds the Modal-image + dataset-env constants. Porting to another benchmark = rewrite this one file. |
+| `benchmark_adapter.py` | (all, indirectly) | **The KernelBench adapter** — the benchmark seam. Exposes **plain-data functions** (`run` / `pack` / `solution_meta` / `list_workloads` / `profile` / `list_ncu_options` / `sanitize` / `cheat_check`): only `str`/`list`/`dict` cross it, no benchmark types. Holds benchmark configuration and dataset-env constants. A benchmark change starts here and in the matching task templates. |
 | `bench_utils.py` | bench, profiler-ncu, sanitizer | Shared core — workload loading, baseline I/O, scoring. Frozen segments above. Reaches the benchmark only through `benchmark_adapter`. |
-| `run_local.py` / `run_modal.py` | bench | Backend dispatch. |
+| `run_local.py` / `run_modal.py` / `run_remote.py` | bench | Backend dispatch. |
 | `run_local_profile.py` / `run_modal_profile.py` | profiler-ncu | NCU wrappers. |
 | `run_local_sanitize.py` / `run_modal_sanitize.py` | sanitizer | compute-sanitizer wrappers. |
 | `cheat_check_modal.py` | (parent-only, NOT shipped to child) | Independent correctness audit invoked as `modal run /path/to/parent/scripts/cheat_check_modal.py`. Listed here for cross-reference; the file does not exist inside a spawned child. |
