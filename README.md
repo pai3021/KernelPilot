@@ -2,16 +2,16 @@
 
 中文 | [English](README.en.md)
 
-KernelPilot 用编程 Agent 优化 GPU 算子。选定一个 [KernelBench](https://github.com/ScalingIntelligence/KernelBench) 任务后，它会创建独立工作区，让 Agent 专注修改算子实现。评测通过 SSH 在 GPU 主机上完成，正确性、耗时和实际评测的代码都会留下记录，方便继续迭代。
+KernelPilot 在通用 Coding Agent 底座之上，提供 GPU 算子优化所需的 Harness。选定一个 [KernelBench](https://github.com/ScalingIntelligence/KernelBench) 任务后，它会创建独立工作区，让 Agent 修改算子实现，再通过 SSH 在 GPU 主机检查正确性和耗时。评测结果与实际评测的代码都会保存，方便下一次继续尝试。
 
-最简单的用法是创建一个工作区，自己带着 Agent 迭代。需要连续尝试时，主 Agent 负责选择起点和安排方向，辅 Agent 在独立工作区改代码、跑评测。候选实现和评测结果会保留下来，供下一轮参考。
+最简单的用法是创建一个工作区，自己带着 Agent 迭代。连续优化时，主 Agent 选择一个已有实现作为起点并创建子工作区，辅 Agent 在其中修改和评测算子。通过正确性检查的候选实现会进入参考归档，供后续轮次选用。
 
 ![KernelPilot 架构图，展示主辅 Agent、通用 Agent 底座、算子专用 Harness 和参考归档](docs/images/kernelpilot-system-overview.png)
 
-图的上半部分是主辅 Agent 的迭代过程。辅 Agent 工作时用到的能力分成两层：
+图的上半部分是主辅 Agent 的迭代过程。下半部分展示辅 Agent 依赖的两层能力：**(a) 是通用 Coding Agent 底座，(b) 是 KernelPilot 在底座之上提供的算子专用 Harness**。
 
-- **(a) 通用 Agent 底座**由 Codex 或 Claude Code 提供，负责管理上下文、调用工具和推进任务。
-- **(b) 算子专用 Harness**由 KernelPilot 提供，包括任务模板、GPU 评测适配器、保存历史实现与经验的参考归档，以及 CUDA、Triton 等算子开发技能。
+- **(a) 通用 Coding Agent 底座**：Codex 和 Claude Code 提供 Agent 循环、上下文管理和工具调用。图中的 Other 表示可以通过适配器接入其他 Coding Agent。
+- **(b) 算子专用 Harness**：KernelPilot 提供任务模板、基准评测适配器、保存跨会话实现与经验的参考归档，以及 CUDA、Triton 等算子开发技能。
 
 如果开启 Harness 自进化，系统会在优化后复盘评测记录，提出修改任务说明或技能文档的建议。建议要有评测证据，并通过回归测试后才会采纳。多轮优化的运行方法见[多轮优化说明](docs/closed-loop.md)。
 
