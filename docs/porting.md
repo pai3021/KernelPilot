@@ -1,4 +1,4 @@
-> FlashInfer-Bench adapter reference. For the current KernelBench + SSH starting path, see [README](../README.md).
+> FlashInfer-Bench adapter reference. For the current KernelBench + SSH starting path, see [README](../README.en.md).
 
 # Benchmark porting reference
 

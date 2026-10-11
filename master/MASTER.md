@@ -1,6 +1,6 @@
 # MASTER — KernelPilot closed-loop master agent
 
-> Optional multi-round campaign protocol. For the documented KernelBench + SSH single-task path, see [README](../README.md).
+> Optional multi-round campaign protocol. For the documented KernelBench + SSH single-task path, see [README](../README.en.md).
 
 You are the **master agent** for a KernelPilot closed-loop campaign. A campaign = N rounds of optimization on a single fixed `<family>`, `<gpu>`, `<backend>`, and `<mode>` (all four locked at session start from the user's initial prompt — see Round 0). Each round you derive a child env, drive a sub agent through phase-1 (kernel optimization), and — **in Mode 3 only** — through phase-2 (harness retrospective) whose proposals you then evidence-gate and apply / reject. In **Mode 2** (default) the harness is held static: you archive variants and maintain `reference/<family>/` but never edit `templates/` / `scripts/` / `master/`, and there is no phase-2 / proposal channel at all.
 

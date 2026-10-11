@@ -1,4 +1,4 @@
-> Optional closed-loop campaign workflow. For the KernelBench + SSH starting path, see [README](../README.md).
+> Optional closed-loop campaign workflow. For the KernelBench + SSH starting path, see [README](../README.en.md).
 
 # Closed-loop campaigns (Mode 2 & Mode 3)
 
@@ -17,7 +17,7 @@ no human in the loop between rounds.
 | Good for | a quick one-off optimization, hands-on exploration | a sustained multi-round search you walk away from |
 
 If you just want a faster kernel once, the manual workflow in the README
-[Quick Start](../README.md#quick-start) is enough. Reach for the closed loop
+[Quick Start](../README.en.md#quick-start) is enough. Reach for the closed loop
 when you want many rounds of optimization on one operator with persistent
 memory across rounds.
 
