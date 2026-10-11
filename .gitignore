@@ -45,3 +45,6 @@ Thumbs.db
 
 # Claude Code
 .claude/
+
+# Local project study notes and interview preparation.
+/.study/
