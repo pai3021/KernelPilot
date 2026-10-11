@@ -8,11 +8,11 @@ Use one workspace directly or run a multi-round campaign. In a campaign, the mas
 
 ![KernelPilot architecture showing the master/sub loop, agent adapters, cross-session archive, and optional harness proposals](docs/images/kernelpilot-system-overview.png)
 
-The sub agent runs on **(a) Generic Agent Substrate**: the agent loop, context, and tools supplied by Codex or Claude Code. KernelPilot adds **(b) Kernel-Specific Harness**: a task template, benchmark adapter, reference archive with variants and lessons from earlier runs, and kernel skills. Campaigns can also propose changes to harness guidance. Those changes go through evidence and regression checks.
+The sub agent runs on **(a) Generic Agent Substrate**: the agent loop, context, and tools supplied by Codex or Claude Code. KernelPilot adds **(b) Kernel-Specific Harness**: a task template, benchmark adapter, reference archive with variants and lessons from earlier runs, and kernel skills.
+
+After a bounded multi-round experiment, an optional Harness retrospective may propose one change to task guidance or kernel skills based on benchmark evidence. It may also make no proposal. Proposed changes are screened for scope and evidence, and the outcome is recorded.
 
 In one recorded RTX 4090 run, a Codex-generated Triton kernel cut `91_cumsum_reverse` from 30.7 ms to 9.84 ms (**3.12×**). [Code and benchmark details](#recorded-ssh-example).
-
-The [quick start](#quick-start) uses one child workspace. For the master/sub workflow, see [closed-loop campaigns](docs/closed-loop.md).
 
 ## In the code
 

@@ -13,7 +13,7 @@ KernelPilot 在通用 Coding Agent 底座之上，提供 GPU 算子优化所需�
 - **(a) 通用 Coding Agent 底座**：Codex 和 Claude Code 提供 Agent 循环、上下文管理和工具调用。图中的 Other 表示可以通过适配器接入其他 Coding Agent。
 - **(b) 算子专用 Harness**：KernelPilot 提供任务模板、基准评测适配器、保存跨会话实现与经验的参考归档，以及 CUDA、Triton 等算子开发技能。
 
-如果开启 Harness 自进化，系统会在优化后复盘评测记录，提出修改任务说明或技能文档的建议。建议要有评测证据，并通过回归测试后才会采纳。多轮优化的运行方法见[多轮优化说明](docs/closed-loop.md)。
+在有界多轮实验结束后，可选的 Harness 复盘会根据评测记录，提出一条修改任务说明或算子技能的建议，也可以不提出建议。提议会经过范围和证据检查，处理结果会被记录。
 
 ## 代码从哪里看
 
