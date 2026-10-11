@@ -63,13 +63,12 @@ For KernelBench Level 1 `91_cumsum_reverse`, Codex generated a [Triton reverse-s
 | Candidate latency | 9.84 ms |
 | Speedup on this task | 3.12× |
 | Timing | 20 CUDA-event trials |
-| Evaluated candidate | SHA-256 `8acc4ec88b8cb56d5516775db4b9c7cef1b516487b70b2b1da4114a2fd8ecde2` |
 
 To rerun it, use the `91_cumsum_reverse` quick-start command, copy the example to the child's `solution/kernel.py`, set `language = "triton"` under `[build]` in `config.toml`, and run `bash scripts/bench.sh --label "reverse-cumsum"`.
 
 ## Evaluation
 
-Each run records correctness, latency, trial counts, and the hash of the evaluated file. See [evaluation notes](docs/evaluation.md) for the measurement details.
+Each run records correctness, latency, and trial counts, and saves a snapshot of the evaluated code. See [evaluation notes](docs/evaluation.md) for the measurement details.
 
 ## License and credits
 

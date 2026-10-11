@@ -64,11 +64,10 @@ python3 -m unittest discover -s tests -q
 | 候选实现耗时 | 9.84 ms |
 | 该任务加速比 | 3.12× |
 | 计时 | 20 次 CUDA Event 测量 |
-| 实际评测文件 | SHA-256 `8acc4ec88b8cb56d5516775db4b9c7cef1b516487b70b2b1da4114a2fd8ecde2` |
 
 要复现这个例子，先用上面的命令创建工作区，再把示例代码复制到工作区的 `solution/kernel.py`。将 `config.toml` 中 `[build]` 下的 `language` 设为 `"triton"`，最后运行 `bash scripts/bench.sh --label "reverse-cumsum"`。
 
-每次评测都会记录正确性、耗时、测试次数和实际评测文件的哈希值。测量方式见[评测说明](docs/evaluation.md)。
+每次评测都会记录正确性、耗时和测试次数，并保存实际评测代码的快照。测量方式见[评测说明](docs/evaluation.md)。
 
 ## 许可证与致谢
 
