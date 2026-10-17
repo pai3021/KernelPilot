@@ -36,6 +36,8 @@ class _FilesystemBenchmarkBridge:
     # Codex 的 workspace-write sandbox 可能禁止新建网络 socket。Worker 因此只
     # 写请求文件，Harness 侧线程校验参数后代跑固定 run_remote.py 并写回响应。
     # 这是传输适配，不会改变 benchmark 的正确性、计分或预算语义。
+    # 客户端在 scripts/benchmark_bridge_client.py；run_remote.py 检测到桥接
+    # 环境变量时转交客户端。父侧服务仍执行同一个 run_remote.py。
 
     def __init__(self, workspace: Path, environment: Mapping[str, str], *, timeout: int) -> None:
         self.workspace = workspace
@@ -53,6 +55,8 @@ class _FilesystemBenchmarkBridge:
         self._thread.start()
 
     def close(self) -> None:
+        # 停止后续轮询并有限等待；这里不会直接中断正在运行的评测子进程。
+        # 评测命令自身的等待期限在 _serve_request 的 subprocess.run 中设置。
         self._stop.set()
         self._thread.join(timeout=2)
 
@@ -80,6 +84,7 @@ class _FilesystemBenchmarkBridge:
         return args
 
     def _respond(self, path: Path, value: dict[str, object]) -> None:
+        # 先写临时文件再替换，避免客户端把未写完的 JSON 当成完整响应。
         temporary = path.with_suffix(path.suffix + ".tmp")
         temporary.write_text(json.dumps(value), encoding="utf-8")
         temporary.replace(path)
@@ -92,6 +97,8 @@ class _FilesystemBenchmarkBridge:
                 raise ValueError("Benchmark bridge protocol mismatch")
             args = self._validated_args(request.get("args"))
             environment = dict(self.environment)
+            # 清掉客户端入口标记并标记服务端，防止 run_remote.py 再转回客户端。
+            # 其余环境（包括分支评测预算位置）继续传递给既有评测代码。
             environment.pop(_BRIDGE_DIR_ENV, None)
             environment[_BRIDGE_SERVER_ENV] = "1"
             completed = subprocess.run(
@@ -111,6 +118,7 @@ class _FilesystemBenchmarkBridge:
     def _serve(self) -> None:
         while not self._stop.is_set():
             for request_path in sorted(self.requests.glob("*.json")):
+                # 用改名认领请求；处理后的文件不再匹配 *.json，避免重复执行。
                 claimed = request_path.with_name(request_path.name + ".processing")
                 try:
                     request_path.replace(claimed)
@@ -141,6 +149,7 @@ class CodexRuntime(AgentRuntime):
         # same spawn selector. Codex permissions are CLI sandbox policy, not a
         # copied Claude allow-list.
         self.permissions = dict(permissions or {})
+        # 这里只记住当前适配器启动的进程，供超时清理使用，不是跨进程会话数据库。
         self._active_processes: dict[str, subprocess.Popen[str]] = {}
 
     @staticmethod
@@ -177,6 +186,7 @@ class CodexRuntime(AgentRuntime):
         task_path.write_text(self.render_task(task), encoding="utf-8")
 
         agents_path = workspace / "AGENTS.md"
+        # AGENTS.md 放通用工作约定与指南入口；CODEX_TASK.md 放本次任务规则。
         agents_path.write_text(self.render_agents(), encoding="utf-8")
 
         created = [task_path, agents_path]
@@ -222,6 +232,7 @@ class CodexRuntime(AgentRuntime):
 
     @staticmethod
     def render_task(task: TaskContract) -> str:
+        # 当前按结构化字段生成；不使用 TaskContract.rendered_instructions。
         return (
             "# KernelPilot Codex Task\n\n"
             f"## Objective\n\n{task.objective}\n\n"
@@ -235,6 +246,7 @@ class CodexRuntime(AgentRuntime):
 
     @staticmethod
     def _runtime_prompt(request: AgentRunRequest) -> str:
+        # 先引导读取公共规则，再交付本次分支指令，承接 TaskContract / Request 的拆分。
         return (
             "Read CODEX_TASK.md first; it is the runtime-neutral task contract. "
             "Then follow this run-specific request:\n\n" + request.prompt
@@ -264,6 +276,8 @@ class CodexRuntime(AgentRuntime):
             common.extend(["--config", f'model_reasoning_effort="{reasoning_effort}"'])
         if resume:
             # 将公共 resume(session, request) 翻译为 Codex 的 exec resume 协议。
+            # common[:10] 截取到 exec，随后拼接 resume 参数；上面附加的
+            # model / reasoning 配置当前不会进入这条 resume 命令。
             if not session_id:
                 raise ValueError("Codex resume requires a session_id from a real prior event")
             return common[:10] + ["resume", "--json", "--output-last-message", str(final_message), session_id, request.prompt]
@@ -300,6 +314,7 @@ class CodexRuntime(AgentRuntime):
         transcript_path = artifact_dir / f"{request.artifact_label}-transcript.jsonl"
         stderr_path = artifact_dir / f"{request.artifact_label}-stderr.log"
         environment = os.environ.copy()
+        # 分支预算、推理配置等通过环境传入；不在 Runtime 中重新定义评测规则。
         environment.update({str(key): str(value) for key, value in request.environment.items()})
         bridge = _FilesystemBenchmarkBridge(request.workspace, environment, timeout=request.timeout)
         # bridge 生命周期严格包住 Codex 子进程，并在 finally 中保证关闭。
@@ -313,6 +328,8 @@ class CodexRuntime(AgentRuntime):
         command = self.build_command(request, session_id=session_id, resume=resume)
         try:
             # stdin=DEVNULL 防止非交互任务在最终回复后继续等待终端输入。
+            # cwd 指定工作目录；start_new_session 创建独立 POSIX 会话/进程组，
+            # 让 terminate 能清理该组中的进程。这也是控制端采用 WSL/Linux 的原因之一。
             process = subprocess.Popen(
                 command, cwd=str(request.workspace), text=True,
                 stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=environment,
@@ -331,15 +348,18 @@ class CodexRuntime(AgentRuntime):
                 metadata={"runtime": self.name, "started_at": started_at, "resumed": resume},
             )
 
+        # 新会话 ID 要等输出解析后才知道，运行期间先用 PID 派生的临时键管理进程。
         process_key = session_id or f"pending-{process.pid}"
         self._active_processes[process_key] = process
         timed_out = False
         try:
+            # communicate 同时收集 stdout/stderr，当前会等本次调用结束再解析事件。
             stdout, stderr = process.communicate(timeout=request.timeout)
             exit_code = process.returncode
         except subprocess.TimeoutExpired:
             # 超时后清理进程组；timed_out 与普通 CLI 失败分开表达。
             direct_exit_code = process.poll()
+            # 检查超时发生时进程是否已经退出，避免把退出后的管道等待误记为超时。
             self.terminate(AgentSession(self.name, process_key, request.workspace, "running", started_at))
             stdout, stderr = process.communicate()
             if direct_exit_code is None:
@@ -357,10 +377,12 @@ class CodexRuntime(AgentRuntime):
         # 新会话从 thread.started 提取 ID；resume 流未重复报告时沿用旧 ID。
         observed_session_id = self.session_id_from_events(events) or session_id or ""
         final_message_path = artifact_dir / f"{request.artifact_label}-last-message.txt"
+        # 优先取 CLI 保存的最终回复；文件缺失时才从公共事件携带的原始记录中提取。
         final_message = (
             final_message_path.read_text(encoding="utf-8", errors="replace")
             if final_message_path.is_file() else self._final_message(events)
         )
+        # 这是 CLI 执行状态；benchmark 的正确性和加速比由上层另外读取和判断。
         status = "timed_out" if timed_out else ("completed" if exit_code == 0 else "failed")
         return AgentRunResult(
             session_id=observed_session_id, status=status, exit_code=exit_code,

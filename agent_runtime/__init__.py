@@ -1,5 +1,7 @@
 """Runtime-neutral coding-agent execution boundary for KernelPilot."""
 
+# types.py 说明数据怎么传，base.py 说明统一操作有哪些；
+# codex.py / claude.py 再把这些操作翻译成各自的工作区文件与原生 CLI 调用。
 from .base import AgentRuntime
 from .registry import RuntimeRegistry
 from .types import (

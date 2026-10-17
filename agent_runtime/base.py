@@ -14,6 +14,8 @@ class AgentRuntime(ABC):
     # 这是 Harness 向上层暴露的统一“遥控器”。Campaign 等编排代码
     # 只调用下面这些生命周期方法，不直接拼 Claude/Codex 的命令行参数。
     # 各 CLI 的客观差异不会消失，而是被限制在各自的 Runtime Adapter 内。
+    # 上层决定优化方向；这里管理一次 Agent 调用的生命周期。
+    # ABC + abstractmethod 要求具体适配器实现这些方法，之后才能被实例化。
 
     name: str
 
@@ -29,18 +31,21 @@ class AgentRuntime(ABC):
         """Materialize runtime-native project files into a common child workspace."""
 
         # 将统一 TaskContract 翻译成 CLAUDE.md 或 AGENTS.md/CODEX_TASK.md。
+        # 这里只准备材料，不启动 CLI；spawn.py 和 campaign 都会调用此入口。
 
     @abstractmethod
     def run(self, request: AgentRunRequest) -> AgentRunResult:
         """Start a new agent session."""
 
         # 启动新会话，并把原生 CLI 输出转换成统一 AgentRunResult。
+        # request.prompt 描述本次调用；角色不由 Runtime 类固定。
 
     @abstractmethod
     def resume(self, session: AgentSession, request: AgentRunRequest) -> AgentRunResult:
         """Continue one session using the runtime's native protocol."""
 
         # “继续会话”语义统一，具体 --resume/exec resume 命令由 Adapter 翻译。
+        # session 必须属于同一种 Runtime；不能把 Codex 的 ID 交给 Claude。
 
     @abstractmethod
     def terminate(self, session: AgentSession) -> None:

@@ -35,6 +35,7 @@ class ClaudeCodeRuntime(AgentRuntime):
         self.template_root = Path(template_root)
         self.permissions = dict(permissions or {"allow": []})
         self.executable = executable
+        # 仅管理当前实例启动的活动进程；持久化的会话标识由 AgentSession/产物传递。
         self._active_processes: dict[str, subprocess.Popen[str]] = {}
 
     @property
@@ -83,6 +84,7 @@ class ClaudeCodeRuntime(AgentRuntime):
                 created.append(destination)
 
         settings = {
+            # 把配置和自检 hook 写成 Claude 项目设置，具体机制留在此适配器内部。
             "permissions": self.permissions,
             "hooks": {
                 "PostToolUse": [{
@@ -127,10 +129,13 @@ class ClaudeCodeRuntime(AgentRuntime):
         """Claude-only CLI details stay inside the adapter, not its public request."""
         # run 和 resume 复用同一个构造器，差别只体现在 Claude 私有参数上。
         command = [self.executable]
+        # --print 用于非交互执行，stream-json 用于保留可解析的输出记录。
+        # 当前此方法未将 request.model / sandbox_policy 转成命令行参数。
         if resume:
             command.extend(["--resume", session_id])
         command.extend(["--print", "--verbose", "--output-format", "stream-json"])
         if not resume:
+            # 新会话使用 Harness 生成的 UUID；继续会话则通过 --resume 使用原 ID。
             command.extend(["--session-id", session_id])
         command.append(request.prompt)
         return command
@@ -175,6 +180,7 @@ class ClaudeCodeRuntime(AgentRuntime):
         command = self.build_command(request, session_id=session_id, resume=resume)
         try:
             # stdout/stderr 使用 PIPE 是为了同时保留原始审计材料和生成统一结果。
+            # 独立 POSIX 进程组配合 terminate，便于超时后清理同组子进程。
             process = subprocess.Popen(
                 command,
                 cwd=str(request.workspace),
@@ -203,6 +209,7 @@ class ClaudeCodeRuntime(AgentRuntime):
         self._active_processes[session_id] = process
         timed_out = False
         try:
+            # 当前收集完成后才解析日志；stream-json 格式不等于上层实时消费事件。
             stdout, stderr = process.communicate(timeout=request.timeout)
             exit_code = process.returncode
         except subprocess.TimeoutExpired:
@@ -223,6 +230,7 @@ class ClaudeCodeRuntime(AgentRuntime):
         (artifact_dir / "session-id.txt").write_text(session_id + "\n", encoding="utf-8")
         events = tuple(self.parse_events(stdout or ""))
         # 从这里开始，上层只处理统一事件，不需要理解 Claude 的原生 record。
+        # completed 仅由进程退出码决定，算子正确性和性能仍以 benchmark 报告为准。
         status = "timed_out" if timed_out else ("completed" if exit_code == 0 else "failed")
         return AgentRunResult(
             session_id=session_id,
@@ -253,6 +261,7 @@ class ClaudeCodeRuntime(AgentRuntime):
             content = payload.get("content") if isinstance(payload, dict) else None
             kind = "raw"
             content_types = {
+                # 工具记录有时嵌套在 message.content 中，不能只看顶层 type。
                 item.get("type") for item in content if isinstance(item, dict)
             } if isinstance(content, list) else set()
             if record_type in {"system", "init"}:
@@ -272,6 +281,7 @@ class ClaudeCodeRuntime(AgentRuntime):
 
     @staticmethod
     def _final_message(events: tuple[AgentEvent, ...]) -> str:
+        # 优先从会话完成记录提取最终答复；完整中间过程已经保存在 transcript 中。
         for event in reversed(events):
             data = event.data
             if event.kind == "session_completed":
