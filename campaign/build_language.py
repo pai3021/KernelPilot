@@ -89,7 +89,7 @@ class BuildLanguageConfigurationError(RuntimeError):
             f"but child config has build.language={actual!r}."
         )
 
-
+# 解析构建语言：优先使用 Planner 明确声明的 declared_language，并检查它是否在支持列表中；如果没有声明，则根据 strategy_family 查找默认值。
 def resolve_build_language(strategy_family: str, declared_language: str | None = None) -> str | None:
     """Return the Harness-required build language, or preserve the child default."""
     if declared_language is not None:
@@ -98,7 +98,7 @@ def resolve_build_language(strategy_family: str, declared_language: str | None =
         return declared_language
     return _BUILD_LANGUAGE_BY_STRATEGY_FAMILY.get(strategy_family)
 
-
+# 读取当前配置语言
 def read_build_language(config_path: Path) -> str | None:
     try:
         data = tomllib.loads(Path(config_path).read_text(encoding="utf-8"))
@@ -108,7 +108,7 @@ def read_build_language(config_path: Path) -> str | None:
     value = build.get("language") if isinstance(build, dict) else None
     return value if isinstance(value, str) else None
 
-
+# 将 Planner 选择的构建语言写入配置文件，而不委托给 Worker。
 def materialize_build_language(config_path: Path, strategy_family: str, declared_language: str | None = None) -> str | None:
     """Write the planner-selected build language without delegating config to a worker."""
     expected = resolve_build_language(strategy_family, declared_language)
@@ -133,7 +133,7 @@ def materialize_build_language(config_path: Path, strategy_family: str, declared
     path.write_text(source[:header.end()] + table + source[table_end:], encoding="utf-8")
     return expected
 
-
+# 读回来检查
 def validate_build_language(config_path: Path, strategy_family: str, declared_language: str | None = None) -> None:
     """Fail before worker/benchmark execution when a required DSL backend is absent."""
     expected = resolve_build_language(strategy_family, declared_language)

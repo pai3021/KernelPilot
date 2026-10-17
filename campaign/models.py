@@ -21,14 +21,14 @@ class RoundState(str, Enum):
 
 @dataclass(frozen=True)
 class BranchSpec:
-    branch_id: str
-    parent_id: str
-    hypothesis: str
-    strategy_family: str
-    reason: str
-    expected_signal: str
-    worker_prompt: str
-    build_language: str | None = None
+    branch_id: str                      # 分支id
+    parent_id: str                      # 从哪个已有版本出发
+    hypothesis: str                     # 本次优化的假设
+    strategy_family: str                # 优化策略类型
+    reason: str                         # 为什么选择这个策略
+    expected_signal: str                # 预期的性能信号
+    worker_prompt: str                  # 交给worker 的提示词
+    build_language: str | None = None   # 候选准备使用的语言
 
     def __post_init__(self) -> None:
         for field_name, value in asdict(self).items():
@@ -55,16 +55,17 @@ class BranchSpec:
 
 @dataclass(frozen=True)
 class BranchResult:
-    branch_id: str
-    runtime: str
-    session_id: str
-    status: str
-    candidate_path: Path
+    branch_id: str                   # 分支id
+    runtime: str                     # 哪个 coding agent
+    session_id: str                  # 会话id
+    status: str                      # 分支评测状态：PASSED / FAILED；Agent 运行失败原因另记在 failure_type
+    candidate_path: Path             # 候选代码位置，但优先指向快照
     diff: str
-    benchmark_result: Mapping[str, Any] | None
-    benchmark_calls: int
-    final_message: str
-    failure_type: str | None
+    benchmark_result: Mapping[str, Any] | None # 实际评测结果，包括正确性状态、耗时、加速比等
+    benchmark_calls: int             # 评测调用次数
+    final_message: str               # Agent 的最终回复
+    failure_type: str | None         # 失败类型：Agent 超时、没有评测报告、正确性失败
+    # 实际评测代码的哈希、快照位置和评测时间
     evaluated_candidate_sha256: str | None = None
     evaluated_candidate_path: Path | None = None
     evaluated_at: str | None = None
@@ -111,13 +112,13 @@ class BranchResult:
 
 @dataclass(frozen=True)
 class RoundResult:
-    round_id: str
-    state: RoundState
-    parent_id: str
-    parent_speedup: float
-    branches: tuple[BranchResult, ...]
-    selected_branch_id: str | None
-    promotion_decision: str
+    round_id: str                    # 轮次编号
+    state: RoundState                # 这一轮最后处于什么状态
+    parent_id: str                   # 本轮从哪个代码版本出发
+    parent_speedup: float            # 父候选加速比
+    branches: tuple[BranchResult, ...] # 这一轮各分支的 BranchResult
+    selected_branch_id: str | None   # 选中了哪个分支；没有晋升候选时可以为空
+    promotion_decision: str          # 晋升候选、保留当前父版本等决策
     artifacts: Mapping[str, Path] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:

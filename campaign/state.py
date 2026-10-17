@@ -9,17 +9,23 @@ from typing import Any, Mapping
 
 @dataclass(frozen=True)
 class ParentSnapshot:
-    parent_id: str
-    source_branch: str
-    candidate_path: Path
-    benchmark_result: Mapping[str, Any]
-    promoted_round: str
-    diff: str = ""
+    parent_id: str          # 父候选的唯一标识符
+    source_branch: str      # 父候选的源分支名称
+    candidate_path: Path    # 父候选的代码路径
+    benchmark_result: Mapping[str, Any]  # 父候选的评测结果
+    promoted_round: str     # 父候选晋升的轮次编号
+    diff: str = ""          # 该候选在其工作区中记录的代码差异
 
     def to_dict(self) -> dict[str, Any]:
         value = asdict(self); value["candidate_path"] = str(self.candidate_path); return value
 
-
+# RoundRecord：把一轮经过放进历史。
+# 它记录：
+# - 这一轮从哪个父版本出发。
+# - 提出了哪些分支计划。
+# - 各分支得到什么结果。
+# - 选中了谁、做了什么决策。
+# - 最终保留哪个版本作为后续起点。
 @dataclass(frozen=True)
 class RoundRecord:
     round_id: str
@@ -33,7 +39,7 @@ class RoundRecord:
 
     def to_dict(self) -> dict[str, Any]: return asdict(self)
 
-
+# 整个 campaign 的当前状态
 @dataclass
 class CampaignState:
     campaign_id: str

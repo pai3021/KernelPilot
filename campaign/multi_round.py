@@ -28,7 +28,7 @@ class TwoRoundCampaign:
         self.state_path = self.root / "campaign-state.json"
         self.budget_path = self.root / "campaign-budget.json"
         self.lineage_path = self.root / "lineage.json"
-
+    # 把第一轮历史结果变成第二轮的起点
     def _seed_from_phase2a(self) -> CampaignState:
         source = self.project_root / "artifacts" / "phase2a" / "phase2a-r001" / "round-result-recovered.json"
         data = json.loads(source.read_text())
@@ -56,7 +56,7 @@ class TwoRoundCampaign:
             initial_parent=parent, current_parent=parent, best_result=dict(winner["benchmark_result"]),
             round_history=[record], benchmark_budget_total=4, benchmark_budget_used=2,
         )
-
+    # 把初始状态真正写到磁盘，也就是创建目录和保存记录
     def _initialize(self) -> CampaignState:
         if self.root.exists():
             raise FileExistsError(f"campaign artifact directory already exists: {self.root}")
@@ -69,15 +69,19 @@ class TwoRoundCampaign:
         state.save(self.state_path)
         self.lineage_path.write_text(json.dumps({"initial_parent": parent_dict(state.initial_parent), "round_001_winner": parent_dict(state.current_parent)}, indent=2) + "\n")
         return state
-
+    # 把上一轮的结果转成提示词，让下一轮 Planner 带着反馈制定方案
     @staticmethod
     def _planning_context(state: CampaignState) -> str:
+        # 取最近一轮的记录，然后写入当前父版本和当前最好成绩
         history = state.round_history[-1]
         feedback = [
             f"Current promoted parent: {state.current_parent.parent_id}",
             f"Current benchmark: correctness {state.best_result.get('status')}, speedup {state.best_result.get('speedup_factor')}x.",
             "Previous branches:",
         ]
+        # 告诉 Planner：上一轮分别尝试过什么、结果怎样
+        # 这里提供简要反馈：各分支的策略名称、失败类型或评测状态，以及当前最优成绩。
+        # 没有把每个分支的完整代码、实验笔记、性能报告全部交给 Planner。
         specs_by_id = {str(spec.get("branch_id")): spec for spec in history.branch_specs}
         for result in history.branch_results:
             benchmark = result.get("benchmark_result") if isinstance(result, Mapping) else {}
@@ -85,7 +89,7 @@ class TwoRoundCampaign:
             feedback.append(f"- {result.get('branch_id')}: strategy_family={spec.get('strategy_family')}; status={result.get('failure_type') or benchmark.get('status')}.")
         feedback.extend(["One branch should exploit the successful parent direction; the other should explore a materially different direction.", "Do not blindly repeat the same failed implementation."])
         return "\n".join(feedback)
-
+    # 运行第二轮，返回最终状态
     def run_round_two(self, *, resume: bool = False) -> CampaignState:
         if resume:
             if not self.state_path.is_file():
@@ -112,6 +116,7 @@ class TwoRoundCampaign:
             artifact_root=self.root, child_label_prefix=f"phase2b-{self.campaign_id}", branch_ids=("b3", "b4"),
             planning_context=self._planning_context(state), before_branch=reserve_campaign_slot,
         )
+        # 执行、保存结果，再按配置触发是否复盘
         result = controller.run()
         self._record_round_two(state, result)
         if self.self_evolution.enabled and self.self_evolution.after_campaign:
@@ -119,7 +124,7 @@ class TwoRoundCampaign:
                 self._retrospective_context(state)
             )
         return state
-
+    # 生成复盘上下文，供 Self-Evolution 使用
     def _retrospective_context(self, state: CampaignState) -> RetrospectiveContext:
         """Bounded campaign evidence for optional Mode-3-style reflection."""
         records = ExperienceStore(self.project_root / "artifacts/memory/experiences.jsonl").list()[:3]
@@ -138,7 +143,7 @@ class TwoRoundCampaign:
             relevant_experiences=tuple({"experience_id": record.experience_id, "outcome": record.outcome, "lesson": record.lesson} for record in records),
             known_harness_events=(),
         )
-
+    # 记录第二轮的结果到历史状态，并更新当前父版本和预算
     def _record_round_two(self, state: CampaignState, result: RoundResult) -> None:
         round_path = self.root / "round-002.json"
         round_path.write_text(json.dumps(result.to_dict(), indent=2) + "\n")

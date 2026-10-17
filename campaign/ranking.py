@@ -14,7 +14,7 @@ class RankingDecision:
     decision: str
     reason: str
 
-
+# 固定规则判断：选择正确性通过且速度提升最大的分支；如果没有任何分支超过父候选，则保留父候选。
 def rank_candidates(branches: Iterable[BranchResult], *, parent_speedup: float) -> RankingDecision:
     valid = [branch for branch in branches if branch.correctness_passed and branch.speedup_factor is not None]
     if not valid:

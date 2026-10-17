@@ -24,6 +24,7 @@ class BranchPlanner:
     model: str | None = None
     reasoning_effort: str | None = None
 
+    # 组装给 planner 的 prompt，要求返回两个分支的 JSON 描述。prompt 里包含父候选的加速比、任务目标、可编辑文件、评测命令等信息。
     def _prompt(self, *, parent_id: str, parent_speedup: float, task: TaskContract, retry: bool, branch_ids: tuple[str, str], planning_context: str) -> str:
         correction = "\nYour preceding response was invalid. Return only the required JSON object." if retry else ""
         prompt = (
@@ -50,6 +51,7 @@ class BranchPlanner:
         )
         return prompt
 
+    # 解析 planner 返回的 JSON 字符串，生成两个 BranchSpec 对象。
     @staticmethod
     def parse(text: str, *, parent_id: str, branch_ids: tuple[str, str] = ("b1", "b2")) -> tuple[BranchSpec, BranchSpec]:
         try:
@@ -74,6 +76,7 @@ class BranchPlanner:
             raise ValueError("branch strategy_family values must differ")
         return branches  # type: ignore[return-value]
 
+    # 调用 Runtime 运行 planner，最多尝试两次获取有效输出；成功时返回两个 BranchSpec 和实际调用的 AgentRunResult 记录。
     def plan(self, *, workspace: Path, parent_id: str, parent_speedup: float, task: TaskContract, branch_ids: tuple[str, str] = ("b1", "b2"), planning_context: str = "") -> tuple[tuple[BranchSpec, BranchSpec], tuple[Any, ...]]:
         runtime = RuntimeRegistry.create(self.runtime_name, template_root=self.template_root)
         runtime.prepare_workspace(workspace, task)

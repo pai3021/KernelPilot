@@ -46,20 +46,24 @@ class TwoBranchController:
     def __init__(
         self,
         *,
-        project_root: Path,
-        task: TaskContract,
-        operator: str,
-        dataset: Path,
-        parent_kernel: Path,
-        parent_id: str,
-        parent_speedup: float,
-        worker_runtime: str = "codex",
-        planner_runtime: str = "codex",
-        runtime_model: str | None = None,
-        runtime_reasoning_effort: str | None = None,
-        round_id: str = "round-001",
+        # 1. 本轮任务
+        project_root: Path,  # 项目目录
+        task: TaskContract,  # 任务合同
+        operator: str,       # 算子
+        dataset: Path,       # 数据集
+        # 2. 父候选信息 / 优化起点
+        parent_kernel: Path, # 父候选代码文件路径
+        parent_id: str,      # 父候选的唯一标识
+        parent_speedup: float,  # 父候选的加速比
+        # 3. Agent 运行时配置
+        worker_runtime: str = "codex",   # worker agent选择
+        planner_runtime: str = "codex",  # planner agent选择
+        runtime_model: str | None = None,  # 模型选择
+        runtime_reasoning_effort: str | None = None,  # 思考强度
+        # 4. 实验组织
+        round_id: str = "round-001",  # 轮次编号
         spawn_child: Callable[[str], Path] | None = None,
-        artifact_root: Path | None = None,
+        artifact_root: Path | None = None,  # 产物位置
         child_label_prefix: str = "phase2a",
         branch_ids: tuple[str, str] = ("b1", "b2"),
         planning_context: str = "",
@@ -145,7 +149,7 @@ class TwoBranchController:
             "budget ledger. In your final response state: changed code, correctness, reference latency, candidate latency, "
             "speedup, and whether this branch supports or rejects its hypothesis."
         )
-
+    # 收集分支运行结果，生成 BranchResult 对象
     def _branch_result(self, spec: BranchSpec, workspace: Path, run: Any | None, error: Exception | None) -> BranchResult:
         budget_path = workspace / ".ako" / "branch-budget.json"
         try:
@@ -198,11 +202,12 @@ class TwoBranchController:
             evaluated_candidate_sha256=candidate_sha256, evaluated_candidate_path=evaluated_candidate_path, artifacts=artifacts,
             evaluated_at=evaluated_at,
         )
-
+    # 运行分支
     def _run_branch(self, spec: BranchSpec) -> BranchResult:
         workspace: Path | None = None
         run: Any | None = None
         try:
+            # 使用 spawn.py 创建独立工作区，并从父候选出发
             workspace = self._spawn_child(spec.branch_id)
             if self.before_branch is not None:
                 self.before_branch(spec)
@@ -210,11 +215,14 @@ class TwoBranchController:
             # configuration belongs to the Harness.  Materialize and verify it
             # before a worker can spend either its formal benchmark budget or a
             # remote GPU evaluation.
+            # 把实现语言写入配置 Triton / cpp
             config_path = workspace / "config.toml"
             materialize_build_language(config_path, spec.strategy_family, spec.build_language)
             validate_build_language(config_path, spec.strategy_family, spec.build_language)
+            # 创建这个分支的评测预算，初始使用次数为 0，上限为 1
             ledger = workspace / ".ako" / "branch-budget.json"
             initialize_budget(ledger, limit=1)
+            # 准备本轮任务，并启动 Worker Agent
             runtime = RuntimeRegistry.create(self.worker_runtime, template_root=self.project_root)
             # spawn materializes only a generic child contract.  The controller
             # owns the round-specific TaskContract, so make it the authoritative
@@ -231,23 +239,23 @@ class TwoBranchController:
                 workspace = self.round_dir / "failed-workspaces" / spec.branch_id
                 workspace.mkdir(parents=True, exist_ok=True)
             return self._branch_result(spec, workspace, run, exc)
-
+    # 整轮实验的主线入口
     def run(self) -> RoundResult:
         if self.round_dir.exists():
             raise FileExistsError(f"round artifact directory already exists: {self.round_dir}")
-        self._record_state(RoundState.PLANNING)
+        self._record_state(RoundState.PLANNING)  # 规划中
         try:
-            specs = self._plan()
+            specs = self._plan()  # 取得两个分支计划
         except PlanningFailure as exc:
             self._record_state(RoundState.FAILED, error=str(exc))
             result = RoundResult(self.round_id, RoundState.FAILED, self.parent_id, self.parent_speedup, (), None, "PLANNING_FAILURE", {"round_dir": self.round_dir})
             (self.round_dir / "round-result.json").write_text(json.dumps(result.to_dict(), indent=2) + "\n")
             return result
-        self._record_state(RoundState.BRANCHES_READY)
-        self._record_state(RoundState.RUNNING)
+        self._record_state(RoundState.BRANCHES_READY)  # 分支准备就绪
+        self._record_state(RoundState.RUNNING)  # 分支运行中
         branches = tuple(self._run_branch(spec) for spec in specs)
-        self._record_state(RoundState.EVALUATING)
-        decision = rank_candidates(branches, parent_speedup=self.parent_speedup)
+        self._record_state(RoundState.EVALUATING)  # 分支评测中
+        decision = rank_candidates(branches, parent_speedup=self.parent_speedup)  # 根据实测结果选择
         final_state = RoundState.PROMOTED if decision.decision == "PROMOTE" else RoundState.NO_IMPROVEMENT
         self._record_state(final_state, ranking=asdict(decision))
         result = RoundResult(
