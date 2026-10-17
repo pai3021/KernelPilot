@@ -1,6 +1,7 @@
 from __future__ import annotations
 from .retrieval import MemoryHit
 
+# 组装可以加入提示词的历史经验上下文
 class ExperienceContextBuilder:
     def __init__(self, *, max_full_records: int = 2, max_characters: int = 3500) -> None:
         self.max_full_records, self.max_characters = max_full_records, max_characters

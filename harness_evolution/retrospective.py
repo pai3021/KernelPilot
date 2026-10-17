@@ -9,7 +9,7 @@ from agent_runtime import AgentRunRequest, RuntimeRegistry, TaskContract
 
 from .models import HarnessProposal, RetrospectiveContext
 
-
+# 调用复盘 Agent，把实验材料转换成一条可选的改进提案
 class Retrospective:
     def __init__(self, *, project_root: Path, runtime_name: str, timeout: int = 300) -> None:
         self.project_root = Path(project_root)

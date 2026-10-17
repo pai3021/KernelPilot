@@ -4,11 +4,11 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any, Mapping
 
-
+# 交给复盘 Agent 的实验材料
 @dataclass(frozen=True)
 class RetrospectiveContext:
-    campaign_id: str
-    task_signature: Mapping[str, Any]
+    campaign_id: str    # 复盘的 campaign id
+    task_signature: Mapping[str, Any]   # 当前任务的签名
     round_summary: Mapping[str, Any]
     successful_branches: tuple[Mapping[str, Any], ...] = ()
     failed_branches: tuple[Mapping[str, Any], ...] = ()
@@ -20,19 +20,20 @@ class RetrospectiveContext:
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
-
+# 结构化改进提案：发现了什么问题、有什么证据、
+# 建议改哪里，以及预期收益和风险
 @dataclass(frozen=True)
 class HarnessProposal:
-    proposal_id: str
-    problem: str
-    evidence: tuple[str, ...]
-    target_type: str
-    target_path: str
-    current_behavior: str
-    proposed_change: str
-    expected_effect: str
-    risk: str
-    scope_class: str
+    proposal_id: str            # 提案编号
+    problem: str                # 发现的具体问题
+    evidence: tuple[str, ...]   # 证据
+    target_type: str            # 修改对象的类型
+    target_path: str            # 建议修改哪个文件
+    current_behavior: str       # 目前的说明或行为是什么
+    proposed_change: str        # 建议加入什么改进内容
+    expected_effect: str        # 希望改善什么
+    risk: str                   # 可能带来什么问题
+    scope_class: str            # 提案声明自己属于什么修改范围
     source_experiences: tuple[str, ...] = ()
     resolution_key: str = ""
 
@@ -65,7 +66,7 @@ class HarnessProposal:
         data["resolution_key"] = str(data.get("resolution_key", ""))
         return cls(**data)
 
-
+# 检查结论：提案被接受还是拒绝、原因是什么
 @dataclass(frozen=True)
 class GateDecision:
     decision: str

@@ -10,7 +10,7 @@ from campaign.models import BranchResult, BranchSpec, RoundResult
 from .models import ExperienceRecord, TaskSignature
 from .store import ExperienceStore
 
-
+# 先给这次尝试归类
 def _outcome(branch: BranchResult, selected: bool, decision: str) -> str:
     result = branch.benchmark_result or {}
     if selected and decision == "PROMOTE":
@@ -28,7 +28,7 @@ def _outcome(branch: BranchResult, selected: bool, decision: str) -> str:
         return "RUNTIME_FAILURE"
     return "INFRA_FAILURE"
 
-
+# 为有候选哈希且能匹配方案的分支提取经验记录，其余分支跳过。
 def extract_round(
     store: ExperienceStore,
     *,

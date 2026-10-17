@@ -11,7 +11,7 @@ class SelfEvolutionConfig:
     enabled: bool = True
     runtime: str = "codex"
     after_campaign: bool = True
-    max_proposals: int = 1
+    max_proposals: int = 1  # 每次复盘的提案数量配置
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any] | None = None) -> "SelfEvolutionConfig":

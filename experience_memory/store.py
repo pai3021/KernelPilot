@@ -5,6 +5,7 @@ from collections.abc import Callable
 
 from .models import ExperienceRecord
 
+# 负责经验记录的保存和读取，使用的是 JSONL 文件
 class ExperienceStore:
     def __init__(self, path: Path) -> None: self.path = Path(path)
     def list(self) -> list[ExperienceRecord]:

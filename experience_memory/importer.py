@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Mapping
 from .models import ExperienceRecord, TaskSignature
 from .store import ExperienceStore
-
+# 为指定的历史实验补建结构化经验，复用统一的记录格式和存储机制。
 SOURCE_SIGNATURE = TaskSignature("KernelBench", "1_Square_matrix_multiplication_", "level1", "matrix_multiplication", "gemm", "A[N,N],B[N,N]", "square_4096x4096", "float32", "RTX4090", "cuda_event_correctness_latency")
 
 def _outcome(result: Mapping[str, Any], promoted: bool) -> str:
