@@ -4,4 +4,9 @@ KernelPilot's KernelBench adapter checks each candidate against the fixed task o
 
 The current public README does not present an aggregate speedup figure. A release result should include the task list, KernelBench revision, GPU and software environment, all correctness outcomes, formal evaluation counts, candidate hashes, timing method, and per-task measurements. Keep failed tasks in the denominator and separate infrastructure failures from incorrect kernels.
 
+For resource waiting, dispatch accounting, and blocked-run recovery, see
+[remote resource recovery](remote-resource-recovery.md). New managed branch ledgers
+record an explicit accounting policy; historical attempts are never refunded or
+pooled with the new protocol.
+
 Earlier FlashInfer-Bench results use a different benchmark and GPU. Source attribution is in [third-party notices](../THIRD_PARTY_NOTICES.md).

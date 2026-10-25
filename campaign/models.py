@@ -17,6 +17,7 @@ class RoundState(str, Enum):
     PROMOTED = "PROMOTED"
     NO_IMPROVEMENT = "NO_IMPROVEMENT"
     FAILED = "FAILED"
+    RESOURCE_BLOCKED = "RESOURCE_BLOCKED"
 
 
 @dataclass(frozen=True)

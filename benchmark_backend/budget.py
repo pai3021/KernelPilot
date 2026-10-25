@@ -17,7 +17,7 @@ INVOCATION_TOKEN_ENV = "EXPERIMENTPILOT_BENCHMARK_INVOCATION_TOKEN"  # 本次调
 
 
 class BenchmarkBudgetExhausted(RuntimeError):
-    """Raised before a second formal remote evaluation can reach a GPU."""
+    """Raised before an evaluation can exceed the configured branch limit."""
 
 
 def _exhausted_message(data: dict[str, Any]) -> str:
@@ -50,12 +50,15 @@ def _locked(path: Path):
             pass
 
 # 创建预算账本
-def initialize_budget(path: Path, *, limit: int = 1) -> None:
+def initialize_budget(path: Path, *, limit: int = 1, accounting_policy: str = "dispatch") -> None:
     # 用于创建新账本；本函数会覆盖目标文件，恢复历史预算应使用 read_budget。
     if limit < 1:
         raise ValueError("benchmark limit must be positive")
+    if accounting_policy not in {"dispatch", "runner_attempt"}:
+        raise ValueError("Unknown benchmark accounting policy")
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"benchmark_limit": limit, "benchmark_used": 0, "issued_tokens": []}, indent=2) + "\n")
+    path.write_text(json.dumps({"benchmark_limit": limit, "benchmark_used": 0, "issued_tokens": [],
+                                "accounting_policy": accounting_policy}, indent=2) + "\n")
 
 # 读取，并检查这些字段的基本类型
 def read_budget(path: Path) -> dict[str, Any]:
@@ -64,7 +67,24 @@ def read_budget(path: Path) -> dict[str, Any]:
         raise ValueError(f"Malformed benchmark budget ledger: {path}")
     if not isinstance(data.get("issued_tokens"), list):
         raise ValueError(f"Malformed benchmark budget token ledger: {path}")
+    if data.get("accounting_policy", "runner_attempt") not in {"dispatch", "runner_attempt"}:
+        raise ValueError(f"Malformed benchmark accounting policy: {path}")
     return data
+
+
+def check_budget_available() -> None:
+    """Fail before SSH, without charging or changing a pending scope."""
+    raw_path = os.environ.get(BUDGET_FILE_ENV)
+    if not raw_path:
+        return
+    data = read_budget(Path(raw_path))
+    token = os.environ.get(INVOCATION_TOKEN_ENV)
+    if token:
+        if token not in data["issued_tokens"]:
+            raise RuntimeError("Benchmark invocation token is not present in the branch budget ledger")
+    elif data["benchmark_used"] >= data["benchmark_limit"]:
+        raise BenchmarkBudgetExhausted(_exhausted_message(data))
+
 
 # 临时文件替换：避免账本只写了一半
 def _write_budget(path: Path, data: dict[str, Any]) -> None:
@@ -75,7 +95,7 @@ def _write_budget(path: Path, data: dict[str, Any]) -> None:
 
 # 扣除一次额度，返回一个 token
 def reserve_budget(path: Path) -> str:
-    """Consume one formal evaluation and return its process-scoped token."""
+    """Consume one comparison credit and return its process-scoped token."""
     # 锁内完成读取、检查、扣除、写回；后续评测失败也不会在这里自动退回额度。
     with _locked(path):
         data = read_budget(path)
@@ -87,17 +107,27 @@ def reserve_budget(path: Path) -> str:
         _write_budget(path, data)
     return token
 
-# 在正式入口申请一次额度
+# 在正式入口开启一次比较作用域
 def begin_benchmark_scope_from_environment() -> None:
-    """Reserve one run at the official runner seam, if this is a branch."""
-    # 正式 runner 为一次完整比较申请额度；参考和候选的内部调用共用这个 token。
+    """Open a comparison scope; new ledgers charge only at remote dispatch.
+
+    Ledgers without an accounting_policy retain the historical runner-attempt
+    behavior. No completed experiment is migrated or retrospectively refunded.
+    """
+    # 正式 runner 开启比较作用域；参考和候选共用 token，新账本在 dispatch 时扣减。
+    check_budget_available()
     raw_path = os.environ.get(BUDGET_FILE_ENV)
     if raw_path and not os.environ.get(INVOCATION_TOKEN_ENV):
-        os.environ[INVOCATION_TOKEN_ENV] = reserve_budget(Path(raw_path))
+        if read_budget(Path(raw_path)).get("accounting_policy", "runner_attempt") == "runner_attempt":
+            os.environ[INVOCATION_TOKEN_ENV] = reserve_budget(Path(raw_path))
 
 # 在后端入口再次检查
 def ensure_evaluation_authorized() -> None:
-    """Guard the evaluator-facing seam, including direct runner bypasses."""
+    """Commit a comparison immediately before dispatch, including direct calls.
+
+    Once committed, an SSH interruption or unknown execution outcome remains
+    charged. The same process token covers reference and candidate calls.
+    """
     raw_path = os.environ.get(BUDGET_FILE_ENV)
     if not raw_path:
         # 未传入预算账本时，不启用这层分支预算检查。

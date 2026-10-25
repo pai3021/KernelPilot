@@ -148,7 +148,7 @@ class BudgetGuardTest(unittest.TestCase):
     def setUp(self):
         self.tempdir = tempfile.TemporaryDirectory()
         self.ledger = Path(self.tempdir.name) / "branch-budget.json"
-        initialize_budget(self.ledger)
+        initialize_budget(self.ledger, accounting_policy="runner_attempt")
         self.old_file = os.environ.get(BUDGET_FILE_ENV)
         self.old_token = os.environ.get(INVOCATION_TOKEN_ENV)
         os.environ[BUDGET_FILE_ENV] = str(self.ledger)

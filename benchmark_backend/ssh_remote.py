@@ -13,6 +13,8 @@ import uuid
 from typing import Any, Mapping, Sequence
 
 from .base import BenchmarkBackend, BenchmarkExecutionResult, ExecutionStatus, failure_results
+from .budget import check_budget_available, ensure_evaluation_authorized
+from .resource_guard import block_remote, ensure_not_blocked, record_event
 
 
 _RESERVED_GPUS = frozenset({4})  # 当前项目环境保留的物理 GPU，不参与评测选卡
@@ -29,6 +31,10 @@ _DEFAULT_REMOTE_COMPUTE_SANITIZER = ""
 _DEFAULT_REMOTE_NSYS = ""
 
 
+class GPUUnavailable(RuntimeError):
+    """Valid GPU inventory, but the requested resource is currently occupied."""
+
+
 @dataclass(frozen=True, slots=True)
 class RemoteSSHConfig:
     """Explicit, key-based SSH configuration; no passwords or shell profiles."""
@@ -43,6 +49,8 @@ class RemoteSSHConfig:
     preferred_gpu: int | None = None  # 指定时只检查这张物理卡，不自动换卡
     timeout_seconds: int = 300  # 远程评测进程的超时，不是全流程统一总时限
     max_gpu_memory_mb: int = 1024  # 选卡时已有显存占用的阈值，不是候选显存用量上限
+    gpu_wait_timeout_seconds: int = 60
+    gpu_poll_interval_seconds: int = 5
     ssh_binary: str = "ssh"
     scp_binary: str = "scp"
     ssh_config_file: str = ""
@@ -68,6 +76,10 @@ class RemoteSSHConfig:
         timeout = int(values.get("evaluation_timeout", values.get("timeout_seconds", 300)))
         if timeout < 1:
             raise ValueError("evaluation_timeout must be positive")
+        wait_timeout = int(values.get("gpu_wait_timeout_seconds", 60))
+        poll_interval = int(values.get("gpu_poll_interval_seconds", 5))
+        if wait_timeout < 0 or poll_interval < 1:
+            raise ValueError("GPU wait timeout must be non-negative and poll interval positive")
         return cls(
             remote_host=required("remote_host"),
             remote_repo=required("remote_repo"),
@@ -81,6 +93,8 @@ class RemoteSSHConfig:
             preferred_gpu=gpu,
             timeout_seconds=timeout,
             max_gpu_memory_mb=int(values.get("max_gpu_memory_mb", 1024)),
+            gpu_wait_timeout_seconds=wait_timeout,
+            gpu_poll_interval_seconds=poll_interval,
             ssh_binary=str(values.get("ssh_binary", "ssh")),
             scp_binary=str(values.get("scp_binary", "scp")),
             ssh_config_file=str(values.get("ssh_config_file", "")),
@@ -169,7 +183,7 @@ class RemoteSSHBenchmarkBackend(BenchmarkBackend):
             ])
         return args
     # 选择可用的 GPU
-    def _select_gpu(self) -> int:
+    def _select_gpu(self, *, preferred_gpu: int | None = None) -> int:
         # 查询当前状态，按物理编号选择第一张合格卡；此检查没有为 GPU 加独占锁。
         query = "nvidia-smi --query-gpu=index,memory.used,utilization.gpu --format=csv,noheader,nounits"
         completed = self._ssh(query, timeout=min(20, self.config.timeout_seconds))
@@ -183,19 +197,49 @@ class RemoteSSHBenchmarkBackend(BenchmarkBackend):
             except ValueError:
                 continue
         by_id = {gpu: (memory, utilization) for gpu, memory, utilization in rows}
-        candidates = [self.config.preferred_gpu] if self.config.preferred_gpu is not None else sorted(by_id)
+        requested = self.config.preferred_gpu if preferred_gpu is None else preferred_gpu
+        if not by_id or (requested is not None and requested not in by_id):
+            raise RuntimeError("GPU inventory is empty or does not report the configured device")
+        candidates = [requested] if requested is not None else sorted(by_id)
         for gpu in candidates:
             if gpu in _RESERVED_GPUS or gpu < 0:
                 continue
             state = by_id.get(gpu)
             if state and state[0] <= self.config.max_gpu_memory_mb and state[1] == 0:
                 return gpu
-        requested = self.config.preferred_gpu
         if requested is not None:
             state = by_id.get(requested)
             detail = "not reported" if state is None else f"memory={state[0]} MiB util={state[1]}%"
-            raise RuntimeError(f"Preferred GPU {requested} is unavailable ({detail})")
-        raise RuntimeError("No idle GPU found; GPU 4 is reserved")
+            raise GPUUnavailable(f"Preferred GPU {requested} is unavailable ({detail})")
+        raise GPUUnavailable("No idle GPU found; GPU 4 is reserved")
+
+    def _wait_for_gpu(self, metadata: dict[str, Any], *, preferred_gpu: int | None = None) -> int:
+        """Wait in the control process; only occupancy is retryable.
+
+        This is a readiness gate, not exclusive ownership against other users.
+        The selected physical device is pinned again after uploads.
+        """
+        started = time.monotonic()
+        deadline = started + self.config.gpu_wait_timeout_seconds
+        polls = 0
+        try:
+            while True:
+                polls += 1
+                try:
+                    gpu = (self._select_gpu() if preferred_gpu is None
+                           else self._select_gpu(preferred_gpu=preferred_gpu))
+                    record_event("GPU_READY", {"run_id": metadata["run_id"], "physical_gpu_id": gpu,
+                                               "poll": polls})
+                    return gpu
+                except GPUUnavailable as exc:
+                    record_event("GPU_BUSY", {"run_id": metadata["run_id"], "poll": polls, "reason": str(exc)})
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        raise
+                    time.sleep(min(self.config.gpu_poll_interval_seconds, remaining))
+        finally:
+            metadata["resource_wait_seconds"] = round(metadata.get("resource_wait_seconds", 0) + time.monotonic() - started, 6)
+            metadata["resource_polls"] = metadata.get("resource_polls", 0) + polls
 
     def _preflight(self, physical_gpu: int) -> dict[str, Any]:
         """Check only the execution prerequisites before candidate transfer."""
@@ -227,7 +271,7 @@ class RemoteSSHBenchmarkBackend(BenchmarkBackend):
             if attempt < _PREFLIGHT_ATTEMPTS and transient_environment:
                 # No candidate has been uploaded or evaluated yet. A bounded
                 # retry does not re-run a formal GPU evaluation or reserve an
-                # additional branch-budget unit; authorization happened earlier.
+                # additional branch-budget unit; no evaluator is dispatched here.
                 time.sleep(_PREFLIGHT_RETRY_DELAY_SECONDS)
                 continue
             raise RuntimeError(f"Remote preflight failed: {detail}")
@@ -529,6 +573,8 @@ class RemoteSSHBenchmarkBackend(BenchmarkBackend):
             for item in traces.values():
                 item_metadata = item.setdefault("metadata", {})
                 if isinstance(item_metadata, dict):
+                    if "failure_stage" not in metadata:
+                        item_metadata.pop("failure_stage", None)
                     item_metadata.update(metadata)
 
     def _failure(
@@ -542,28 +588,29 @@ class RemoteSSHBenchmarkBackend(BenchmarkBackend):
     def evaluate_blob(
         self, candidate_blob: str, task_ids: Sequence[str], config: Mapping[str, Any], *, capture_logs: bool = False,
     ) -> BenchmarkExecutionResult:
-        # The guard is a no-op outside a Phase 2 branch.  Keeping it at this
-        # evaluator-facing seam also prevents direct ``run_remote.py`` or
-        # Python backend use from silently bypassing scripts/bench.sh.
-        from .budget import ensure_evaluation_authorized
-        # 检查预算，生成本次运行标识
-        ensure_evaluation_authorized()
-        # 授权检查位于下面的 try 之外；额度不足直接抛出，不包装成基础设施失败。
+        # Check limits before waiting, but commit only immediately before
+        # dispatch. Direct backend calls use the same guard as the runner.
+        ensure_not_blocked()
+        check_budget_available()
+        # 额度预检查位于 try 外；新账本在完成准备后、发起 evaluator SSH 前扣减。
         run_id = f"ep-{int(time.time())}-{uuid.uuid4().hex[:12]}"
         remote_run = self._remote_join(self.config.remote_runs_dir, run_id)
         metadata: dict[str, Any] = {
             "backend": "ssh", "remote_host": self.config.remote_host,
             "remote_workspace": remote_run, "run_id": run_id,
+            "evaluation_dispatched": False, "failure_stage": "resource_wait",
         }
         started = time.monotonic()
         # 选择 GPU，检查环境
         try:
-            physical_gpu = self._select_gpu()
+            physical_gpu = self._wait_for_gpu(metadata)
             # 只暴露选中的物理卡后，远程评测进程内部以 cuda:0 使用它。
             metadata.update({"physical_gpu_id": physical_gpu, "visible_device": "cuda:0"})
+            metadata["failure_stage"] = "preflight"
             metadata.update(self._preflight(physical_gpu))
         except (OSError, subprocess.TimeoutExpired, RuntimeError) as exc:
             metadata["duration_seconds"] = round(time.monotonic() - started, 6)
+            block_remote(str(exc), metadata)
             return self._failure(candidate_blob, task_ids, ExecutionStatus.INFRA_FAILURE,
                                  f"Remote preflight/GPU selection failed: {type(exc).__name__}: {exc}", metadata)
         # 把评测输入写成请求文件，再上传
@@ -583,6 +630,7 @@ class RemoteSSHBenchmarkBackend(BenchmarkBackend):
             request_path.write_text(json.dumps(request, indent=2))
             result_path = local_dir / "result.json"
             try:
+                metadata["failure_stage"] = "upload"
                 mkdir = self._ssh(f"mkdir -p -- {shlex.quote(remote_run)}", timeout=30)
                 if mkdir.returncode != 0:
                     raise RuntimeError(mkdir.stderr.strip() or mkdir.stdout.strip() or "remote mkdir failed")
@@ -607,10 +655,19 @@ class RemoteSSHBenchmarkBackend(BenchmarkBackend):
                     ">", shlex.quote(self._remote_join(remote_run, "stdout.log")),
                     "2>", shlex.quote(self._remote_join(remote_run, "stderr.log")),
                 ])
+                metadata["failure_stage"] = "resource_wait"
+                self._wait_for_gpu(metadata, preferred_gpu=physical_gpu)
+                # Uploads and the last readiness check succeeded. Charge once
+                # before invoking SSH: a lost handshake may hide real execution.
+                ensure_evaluation_authorized()
+                metadata["failure_stage"] = "dispatch"
+                metadata["evaluation_dispatched"] = True
+                record_event("EVALUATION_DISPATCH", metadata)
                 completed = self._ssh(command, timeout=self.config.timeout_seconds + 20)
                 if completed.returncode == 124:
                     raise TimeoutError(f"Remote evaluator exceeded {self.config.timeout_seconds}s")
                 # 即使远程进程非零退出（非超时），也尝试获取结果信封，以文件内容判断结果。
+                metadata["failure_stage"] = "download"
                 fetched, transfer_attempt = self._retry_transfer(
                     lambda *, timeout: self._scp_from(self._remote_join(remote_run, "result.json"), result_path, timeout=timeout)
                 )
@@ -619,23 +676,31 @@ class RemoteSSHBenchmarkBackend(BenchmarkBackend):
                     detail = fetched.stderr.strip() or completed.stderr.strip() or "result.json was not produced"
                     raise RuntimeError(detail)
                 # 校验传输协议，再由详细 workload 结果区分候选正确性和运行失败。
+                metadata["failure_stage"] = "decode"
                 envelope = json.loads(result_path.read_text())
                 if envelope.get("protocol_version") != 1 or not isinstance(envelope.get("results"), dict):
                     raise ValueError("Malformed remote evaluator JSON envelope")
                 remote_metadata = envelope.get("metadata") if isinstance(envelope.get("metadata"), dict) else {}
-                metadata.update(remote_metadata)
+                # Controller dispatch evidence takes precedence over the
+                # request metadata echoed by the remote helper.
+                metadata = {**remote_metadata, **metadata}
                 metadata["duration_seconds"] = round(time.monotonic() - started, 6)
                 results = envelope["results"]
-                self._add_metadata(results, metadata)
                 if envelope.get("status") != ExecutionStatus.SUCCESS.value:
                     message = str(envelope.get("error_log") or "Remote evaluator reported infrastructure failure")
+                    block_remote(message, metadata)
+                    self._add_metadata(results, metadata)
                     return BenchmarkExecutionResult(ExecutionStatus.INFRA_FAILURE, None, error_log=message,
                                                     metadata=metadata, results=results)
                 # 信封 SUCCESS 只表示 adapter 正常返回；候选是否通过仍看 results。
+                metadata.pop("failure_stage", None)
+                self._add_metadata(results, metadata)
+                record_event("EVALUATION_FINISHED", metadata)
                 return BenchmarkExecutionResult.from_results(results, metadata=metadata)
             except (OSError, subprocess.TimeoutExpired, TimeoutError, RuntimeError, ValueError, json.JSONDecodeError) as exc:
                 status = ExecutionStatus.TIMEOUT if isinstance(exc, (TimeoutError, subprocess.TimeoutExpired)) else ExecutionStatus.INFRA_FAILURE
                 metadata["duration_seconds"] = round(time.monotonic() - started, 6)
+                block_remote(str(exc), metadata)
                 return self._failure(candidate_blob, task_ids, status,
                                      f"Remote evaluation failed: {type(exc).__name__}: {exc}", metadata)
 

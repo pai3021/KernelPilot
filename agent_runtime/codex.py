@@ -15,6 +15,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
+from benchmark_backend.budget import BUDGET_FILE_ENV
+from benchmark_backend.resource_guard import RemoteResourceBlocked, read_block
+
 from .base import AgentRuntime
 from .registry import RuntimeRegistry
 from .types import AgentEvent, AgentRunRequest, AgentRunResult, AgentSession, RuntimeCapabilities, TaskContract
@@ -47,6 +50,7 @@ class _FilesystemBenchmarkBridge:
         self.environment = dict(environment)
         self.timeout = timeout
         self._stop = threading.Event()
+        self.blocked = threading.Event()
         self._thread = threading.Thread(target=self._serve, name="codex-benchmark-bridge", daemon=True)
 
     def start(self) -> None:
@@ -89,6 +93,15 @@ class _FilesystemBenchmarkBridge:
         temporary.write_text(json.dumps(value), encoding="utf-8")
         temporary.replace(path)
 
+    def _resource_blocked(self) -> bool:
+        raw = self.environment.get(BUDGET_FILE_ENV)
+        if not raw:
+            return False
+        path = Path(raw)
+        if not path.is_absolute():
+            path = self.workspace / path
+        return read_block(path) is not None
+
     def _serve_request(self, request_path: Path) -> None:
         response_path = self.responses / request_path.name.removesuffix(".processing")
         try:
@@ -96,6 +109,8 @@ class _FilesystemBenchmarkBridge:
             if request.get("protocol_version") != 1:
                 raise ValueError("Benchmark bridge protocol mismatch")
             args = self._validated_args(request.get("args"))
+            if self._resource_blocked():
+                raise RemoteResourceBlocked("Remote evaluation is blocked; stop this branch")
             environment = dict(self.environment)
             # 清掉客户端入口标记并标记服务端，防止 run_remote.py 再转回客户端。
             # 其余环境（包括分支评测预算位置）继续传递给既有评测代码。
@@ -114,10 +129,14 @@ class _FilesystemBenchmarkBridge:
         except Exception as exc:  # Normalize bridge faults into ordinary command output.
             response = {"returncode": 1, "stdout": "", "stderr": f"Benchmark bridge error: {type(exc).__name__}: {exc}\n"}
         self._respond(response_path, response)
+        if self._resource_blocked():
+            self.blocked.set()
 
     def _serve(self) -> None:
         while not self._stop.is_set():
             for request_path in sorted(self.requests.glob("*.json")):
+                if self._stop.is_set():
+                    break
                 # 用改名认领请求；处理后的文件不再匹配 *.json，避免重复执行。
                 claimed = request_path.with_name(request_path.name + ".processing")
                 try:
@@ -317,6 +336,16 @@ class CodexRuntime(AgentRuntime):
         # 分支预算、推理配置等通过环境传入；不在 Runtime 中重新定义评测规则。
         environment.update({str(key): str(value) for key, value in request.environment.items()})
         bridge = _FilesystemBenchmarkBridge(request.workspace, environment, timeout=request.timeout)
+        if bridge._resource_blocked():
+            message = "Remote evaluation is blocked; inspect the existing stop record before starting another worker."
+            stderr_path.write_text(message + "\n", encoding="utf-8")
+            return AgentRunResult(
+                session_id=session_id or "", status="blocked", exit_code=75,
+                final_message="", events=(), timed_out=False, duration=time.monotonic() - started,
+                stderr_tail=message, artifacts={"stderr": stderr_path},
+                metadata={"runtime": self.name, "started_at": started_at, "resumed": resume,
+                          "remote_resource_blocked": True},
+            )
         # bridge 生命周期严格包住 Codex 子进程，并在 finally 中保证关闭。
         bridge.start()
         environment[_BRIDGE_DIR_ENV] = str(bridge.root)
@@ -352,6 +381,16 @@ class CodexRuntime(AgentRuntime):
         process_key = session_id or f"pending-{process.pid}"
         self._active_processes[process_key] = process
         timed_out = False
+        monitor_stop = threading.Event()
+
+        def stop_blocked_worker() -> None:
+            while not monitor_stop.wait(0.1):
+                if bridge.blocked.is_set():
+                    self.terminate(AgentSession(self.name, process_key, request.workspace, "running", started_at))
+                    return
+
+        monitor = threading.Thread(target=stop_blocked_worker, name="codex-resource-stop", daemon=True)
+        monitor.start()
         try:
             # communicate 同时收集 stdout/stderr，当前会等本次调用结束再解析事件。
             stdout, stderr = process.communicate(timeout=request.timeout)
@@ -367,6 +406,8 @@ class CodexRuntime(AgentRuntime):
             else:
                 exit_code = direct_exit_code
         finally:
+            monitor_stop.set()
+            monitor.join(timeout=1)
             self._active_processes.pop(process_key, None)
             bridge.close()
 
@@ -383,7 +424,8 @@ class CodexRuntime(AgentRuntime):
             if final_message_path.is_file() else self._final_message(events)
         )
         # 这是 CLI 执行状态；benchmark 的正确性和加速比由上层另外读取和判断。
-        status = "timed_out" if timed_out else ("completed" if exit_code == 0 else "failed")
+        status = ("blocked" if bridge.blocked.is_set() else
+                  "timed_out" if timed_out else "completed" if exit_code == 0 else "failed")
         return AgentRunResult(
             session_id=observed_session_id, status=status, exit_code=exit_code,
             final_message=final_message, events=events, timed_out=timed_out,
@@ -392,6 +434,7 @@ class CodexRuntime(AgentRuntime):
             metadata={
                 "runtime": self.name, "started_at": started_at, "resumed": resume,
                 "session_id_available": bool(observed_session_id),
+                "remote_resource_blocked": bridge.blocked.is_set(),
                 "executable": self.executable,
             },
         )

@@ -95,8 +95,9 @@ def main() -> None:
     parser.add_argument("--ab-compare", dest="ab_compare", type=str, default=None, metavar="LABEL")
     parser.add_argument("--capture-logs", dest="capture_logs", action="store_true")
     args = parser.parse_args()
-    # One budget unit represents the complete reference/candidate comparison,
-    # not the two backend calls made internally by ``run_and_report``.
+    # One credit covers the complete reference/candidate comparison. New
+    # dispatch-policy ledgers stay pending until the backend is ready to run;
+    # old ledgers retain runner-attempt accounting for reproducibility.
     begin_benchmark_scope_from_environment()
 
     group_axis = ""

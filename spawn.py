@@ -67,6 +67,7 @@ def remote_transport_toml_lines() -> tuple[str, ...]:
 REMOTE_REQUIRED_KEYS = ("host", "remote_repo", "python", "kernelbench", "runs_dir")
 REMOTE_OPTIONAL_KEYS = (
     "compute_sanitizer", "nsys", "evaluation_timeout", "max_gpu_memory_mb",
+    "gpu_wait_timeout_seconds", "gpu_poll_interval_seconds",
     "preferred_gpu", "ssh_binary", "scp_binary", "ssh_config_file",
     "identity_file", "known_hosts_file",
 )
@@ -94,11 +95,14 @@ def load_remote_config(path: str | Path | None) -> dict:
     unknown = sorted(set(remote) - allowed)
     if unknown:
         raise ValueError(f"Unknown remote config keys: {', '.join(unknown)}")
-    numeric = {"evaluation_timeout", "max_gpu_memory_mb", "preferred_gpu"}
+    numeric = {"evaluation_timeout", "max_gpu_memory_mb", "preferred_gpu",
+               "gpu_wait_timeout_seconds", "gpu_poll_interval_seconds"}
     for key, value in remote.items():
         expected = int if key in numeric else str
         if not isinstance(value, expected) or isinstance(value, bool) or (expected is str and not value.strip()):
             raise ValueError(f"Invalid remote config value for {key}")
+    if remote.get("gpu_wait_timeout_seconds", 60) < 0 or remote.get("gpu_poll_interval_seconds", 5) < 1:
+        raise ValueError("GPU wait timeout must be non-negative and poll interval positive")
     return dict(remote)
 
 

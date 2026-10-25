@@ -7,6 +7,9 @@ python = "/path/to/python"
 kernelbench = "/path/to/KernelBench"
 runs_dir = "/path/to/kernelpilot-runs"
 evaluation_timeout = 300
+# Wait in the control process before dispatch; 0 means one check, no retry.
+gpu_wait_timeout_seconds = 60
+gpu_poll_interval_seconds = 5
 # Leave preferred_gpu unset to use the first idle reported GPU (GPU 4 is reserved).
 
 # Optional diagnostics, if installed on the remote host:

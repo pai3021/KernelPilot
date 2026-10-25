@@ -62,7 +62,8 @@ class TwoRoundCampaign:
             raise FileExistsError(f"campaign artifact directory already exists: {self.root}")
         self.root.mkdir(parents=True)
         state = self._seed_from_phase2a()
-        initialize_budget(self.budget_path, limit=4)
+        # This V1 replay imports historical branch-attempt accounting.
+        initialize_budget(self.budget_path, limit=4, accounting_policy="runner_attempt")
         ledger = read_budget(self.budget_path)
         ledger.update({"benchmark_used": 2, "issued_tokens": ["imported-phase2a-b1", "imported-phase2a-b2"], "round_limit": 2, "rounds_completed": 1})
         self.budget_path.write_text(json.dumps(ledger, indent=2) + "\n")
@@ -115,11 +116,12 @@ class TwoRoundCampaign:
             worker_runtime=self.worker_runtime, planner_runtime=self.planner_runtime, round_id="round-002",
             artifact_root=self.root, child_label_prefix=f"phase2b-{self.campaign_id}", branch_ids=("b3", "b4"),
             planning_context=self._planning_context(state), before_branch=reserve_campaign_slot,
+            benchmark_budget_policy="runner_attempt",
         )
         # 执行、保存结果，再按配置触发是否复盘
         result = controller.run()
         self._record_round_two(state, result)
-        if self.self_evolution.enabled and self.self_evolution.after_campaign:
+        if state.status == "COMPLETED" and self.self_evolution.enabled and self.self_evolution.after_campaign:
             EvolutionCoordinator(project_root=self.project_root, config=self.self_evolution).after_campaign(
                 self._retrospective_context(state)
             )
@@ -152,7 +154,7 @@ class TwoRoundCampaign:
         selected_parent = f"{result.round_id}-{result.selected_branch_id}" if result.selected_branch_id else state.current_parent.parent_id
         state.round_history.append(RoundRecord(result.round_id, result.parent_id, {"speedup_factor": result.parent_speedup}, specs, tuple(item.to_dict() for item in result.branches), result.selected_branch_id, result.promotion_decision, selected_parent))
         ledger = read_budget(self.budget_path)
-        ledger["rounds_completed"] = 2
+        ledger["rounds_completed"] = 1 if result.state.value == "RESOURCE_BLOCKED" else 2
         self.budget_path.write_text(json.dumps(ledger, indent=2) + "\n")
         state.benchmark_budget_used = int(ledger["benchmark_used"])
         if result.selected_branch_id:
@@ -160,8 +162,9 @@ class TwoRoundCampaign:
             state.current_parent = ParentSnapshot(f"{result.round_id}-{winner.branch_id}", winner.branch_id, winner.candidate_path, dict(winner.benchmark_result or {}), result.round_id, winner.diff)
             state.best_result = dict(winner.benchmark_result or {})
         state.round_index = 2
-        state.status = "COMPLETED"
-        state.termination_reason = "MAX_ROUNDS" if state.benchmark_budget_used < state.benchmark_budget_total else "BUDGET_EXHAUSTED"
+        state.status = "BLOCKED" if result.state.value == "RESOURCE_BLOCKED" else "COMPLETED"
+        state.termination_reason = ("REMOTE_RESOURCE_BLOCKED" if state.status == "BLOCKED" else
+                                    "MAX_ROUNDS" if state.benchmark_budget_used < state.benchmark_budget_total else "BUDGET_EXHAUSTED")
         state.save(self.state_path)
         self.lineage_path.write_text(json.dumps({"initial_parent": parent_dict(state.initial_parent), "round_001_winner": parent_dict(state.round_history and state.initial_parent), "final_parent": parent_dict(state.current_parent)}, indent=2) + "\n")
         (self.root / "final-result.json").write_text(json.dumps({"campaign_id": state.campaign_id, "status": state.status, "termination_reason": state.termination_reason, "best_parent": parent_dict(state.current_parent), "benchmark_budget_used": state.benchmark_budget_used}, indent=2) + "\n")

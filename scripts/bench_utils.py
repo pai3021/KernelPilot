@@ -1809,6 +1809,14 @@ def save_trajectory(
         "results": results,
     }
 
+    # Bind each report to the pre-evaluation witness; a later edit is not
+    # evidence of the candidate that actually ran. Legacy workspaces may lack it.
+    witness_path = PROJECT_ROOT / ".ako" / "evaluated-candidate.json"
+    try:
+        witness = json.loads(witness_path.read_text())
+        trajectory_data["evaluated_candidate"] = witness
+    except (OSError, ValueError):
+        pass
     with open(run_dir / "results.json", "w") as f:
         json.dump(trajectory_data, f, indent=2)
 
