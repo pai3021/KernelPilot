@@ -9,4 +9,7 @@ For resource waiting, dispatch accounting, and blocked-run recovery, see
 record an explicit accounting policy; historical attempts are never refunded or
 pooled with the new protocol.
 
+The continuous-feedback controls and the shared-support baseline boundary are
+described in [harness ablation](harness-ablation.md).
+
 Earlier FlashInfer-Bench results use a different benchmark and GPU. Source attribution is in [third-party notices](../THIRD_PARTY_NOTICES.md).

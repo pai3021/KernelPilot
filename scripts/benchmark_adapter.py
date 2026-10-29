@@ -162,7 +162,8 @@ def solution_meta(blob):
 
 def _evaluate(task_id: str, data: dict, params: dict, dataset_path, capture_logs: bool) -> dict:
     import torch
-    from kernelbench.eval import eval_kernel_against_ref
+    import kernelbench.eval as evaluator
+    from scripts.strict_validation import validation_context
 
     task = _task_path(dataset_path, task_id)
     correct_trials = int(params.get("correct_trials", params.get("num_trials", 3)))
@@ -172,9 +173,11 @@ def _evaluate(task_id: str, data: dict, params: dict, dataset_path, capture_logs
     timing_method = str(params.get("timing_method", "cuda_event"))
     log = io.StringIO()
     redirect = contextlib.redirect_stdout(log) if capture_logs else contextlib.nullcontext()
-    with redirect:
-        result = eval_kernel_against_ref(
+    profile = params.get("validation_profile")
+    with redirect, validation_context(profile, evaluator, torch):
+        result = evaluator.eval_kernel_against_ref(
             task.read_text(), _candidate_source(data),
+            seed_num=int(params.get("seed", 42)),
             num_correct_trials=correct_trials, num_perf_trials=perf_trials,
             measure_performance=True, timing_method=timing_method, verbose=False,
             device=_device(params), backend=_backend(data["build"]),
@@ -203,6 +206,13 @@ def _evaluate(task_id: str, data: dict, params: dict, dataset_path, capture_logs
                 "num_correct_trials": correct_trials, "num_perf_trials": perf_trials,
                 "device": str(_device(params)),
             }
+    if profile:
+        item["validation_profile"] = profile
+        item["max_abs_error"] = metadata.get("measured_max_abs_error")
+        item["max_rel_error"] = metadata.get("measured_max_rel_error")
+        item["validation_checks"] = metadata.get("validation_checks")
+        if item["status"] == STATUS_INCORRECT_NUMERICAL:
+            item["error_log"] = "Incorrect output under the fixed validation protocol"
     if capture_logs:
         item["log"] = log.getvalue()
     return item

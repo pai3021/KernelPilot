@@ -1,4 +1,4 @@
-"""Structured two-branch planning through the existing AgentRuntime seam."""
+"""Structured one- or two-branch planning through the AgentRuntime seam."""
 
 from __future__ import annotations
 
@@ -16,6 +16,14 @@ class PlanningFailure(RuntimeError):
     """The planner exhausted its one structured-output retry."""
 
 
+def validate_branch_ids(branch_ids: tuple[str, ...]) -> None:
+    """Keep ablations bounded and reject ambiguous branch identities before LLM use."""
+    if (not isinstance(branch_ids, tuple) or len(branch_ids) not in (1, 2)
+            or any(not isinstance(value, str) or not value.strip() for value in branch_ids)
+            or len(set(branch_ids)) != len(branch_ids)):
+        raise ValueError("branch_ids must contain one or two unique non-empty strings")
+
+
 @dataclass
 class BranchPlanner:
     runtime_name: str
@@ -27,17 +35,22 @@ class BranchPlanner:
     task_facts: Mapping[str, Any] | None = None
     allow_strategy_adaptation: bool = False
 
-    # 组装给 planner 的 prompt，要求返回两个分支的 JSON 描述。prompt 里包含父候选的加速比、任务目标、可编辑文件、评测命令等信息。
-    def _prompt(self, *, parent_id: str, parent_speedup: float, task: TaskContract, retry: bool, branch_ids: tuple[str, str], planning_context: str) -> str:
+    # 组装给 planner 的 prompt，按配置返回一个或两个分支的 JSON 描述。prompt 里包含父候选的加速比、任务目标、可编辑文件、评测命令等信息。
+    def _prompt(self, *, parent_id: str, parent_speedup: float, task: TaskContract, retry: bool, branch_ids: tuple[str, ...], planning_context: str) -> str:
+        validate_branch_ids(branch_ids)
         correction = "\nYour preceding response was invalid. Return only the required JSON object." if retry else ""
+        schema = {"branches": [
+            {"branch_id": branch_id, "parent_id": "...", "hypothesis": "...",
+             "strategy_family": "...", "build_language": "python|triton|cuda|cpp|tilelang|cute",
+             "reason": "...", "expected_signal": "...", "worker_prompt": "..."}
+            for branch_id in branch_ids
+        ]}
         prompt = (
             "You are the KernelPilot BranchPlanner. Do not edit files and do not run commands. "
             "Return exactly one JSON object, with no Markdown fence or prose.\n\n"
             "Schema:\n"
-            f'{{"branches":[{{"branch_id":"{branch_ids[0]}","parent_id":"...","hypothesis":"...",'
-            '"strategy_family":"...","build_language":"python|triton|cuda|cpp|tilelang|cute","reason":"...","expected_signal":"...","worker_prompt":"..."},'
-            f'{{"branch_id":"{branch_ids[1]}","parent_id":"...","hypothesis":"...","strategy_family":"...",'
-            '"build_language":"python|triton|cuda|cpp|tilelang|cute","reason":"...","expected_signal":"...","worker_prompt":"..."}]}\n\n'
+            + json.dumps(schema, separators=(",", ":")) + "\n\n"
+            +
             f"Parent id: {parent_id}\nParent speedup: {parent_speedup:.6f}x\n"
             f"Task objective: {task.objective}\n"
             f"Editable files: {', '.join(task.editable_files)}\n"
@@ -52,9 +65,10 @@ class BranchPlanner:
             )
         prompt += (f"\nStructured prior-round summary (use this feedback; do not repeat it verbatim):\n{planning_context}\n" if planning_context else "")
         prompt += (
-            "Plan exactly two practical and clearly different optimization directions. "
-            "The two strategy_family values must differ materially, not merely a parameter change. "
-            "Set build_language to the actual candidate implementation language; Triton kernels must use triton. "
+            ("Plan exactly one practical optimization direction. " if len(branch_ids) == 1 else
+             "Plan exactly two practical and clearly different optimization directions. "
+             "The two strategy_family values must differ materially, not merely a parameter change. ")
+            + "Set build_language to the actual candidate implementation language; Triton kernels must use triton. "
             + ("Treat each hypothesis as a starting point. Workers may revise strategy based on measured feedback; "
              "do not impose restrictions absent from the task contract, including extra numerical-precision requirements. "
              "Each worker_prompt must direct one isolated worker to test and adapt its hypothesis, "
@@ -67,9 +81,11 @@ class BranchPlanner:
         )
         return prompt
 
-    # 解析 planner 返回的 JSON 字符串，生成两个 BranchSpec 对象。
+    # 解析 planner 返回的 JSON 字符串，生成指定数量的 BranchSpec 对象。
     @staticmethod
-    def parse(text: str, *, parent_id: str, branch_ids: tuple[str, str] = ("b1", "b2")) -> tuple[BranchSpec, BranchSpec]:
+    def parse(text: str, *, parent_id: str, branch_ids: tuple[str, ...] = ("b1", "b2")) -> tuple[BranchSpec, ...]:
+        validate_branch_ids(branch_ids)
+        count = len(branch_ids)
         try:
             payload = json.loads(text)
         except json.JSONDecodeError as exc:
@@ -77,23 +93,24 @@ class BranchPlanner:
         if not isinstance(payload, Mapping) or set(payload) != {"branches"}:
             raise ValueError("planner JSON must contain only a branches field")
         raw_branches = payload["branches"]
-        if not isinstance(raw_branches, list) or len(raw_branches) != 2:
-            raise ValueError("planner must return exactly two branches")
+        if not isinstance(raw_branches, list) or len(raw_branches) != count:
+            raise ValueError(f"planner must return exactly {count} branch(es)")
         if any(not isinstance(item, Mapping) or not isinstance(item.get("build_language"), str) or not item["build_language"].strip() for item in raw_branches):
             raise ValueError("planner must declare build_language for every branch")
         branches = tuple(BranchSpec.from_dict(item) for item in raw_branches if isinstance(item, Mapping))
-        if len(branches) != 2:
+        if len(branches) != count:
             raise ValueError("each planner branch must be an object")
         if {branch.branch_id for branch in branches} != set(branch_ids):
-            raise ValueError(f"branch ids must be exactly {branch_ids[0]} and {branch_ids[1]}")
+            raise ValueError(f"branch ids must be exactly {branch_ids!r}")
         if any(branch.parent_id != parent_id for branch in branches):
             raise ValueError("every branch must refer to the requested parent")
-        if branches[0].strategy_family == branches[1].strategy_family:
+        if count == 2 and branches[0].strategy_family == branches[1].strategy_family:
             raise ValueError("branch strategy_family values must differ")
-        return branches  # type: ignore[return-value]
+        return branches
 
-    # 调用 Runtime 运行 planner，最多尝试两次获取有效输出；成功时返回两个 BranchSpec 和实际调用的 AgentRunResult 记录。
-    def plan(self, *, workspace: Path, parent_id: str, parent_speedup: float, task: TaskContract, branch_ids: tuple[str, str] = ("b1", "b2"), planning_context: str = "") -> tuple[tuple[BranchSpec, BranchSpec], tuple[Any, ...]]:
+    # 调用 Runtime 运行 planner，最多尝试两次获取有效输出；成功时返回指定分支及实际调用的 AgentRunResult 记录。
+    def plan(self, *, workspace: Path, parent_id: str, parent_speedup: float, task: TaskContract, branch_ids: tuple[str, ...] = ("b1", "b2"), planning_context: str = "") -> tuple[tuple[BranchSpec, ...], tuple[Any, ...]]:
+        validate_branch_ids(branch_ids)
         runtime = RuntimeRegistry.create(self.runtime_name, template_root=self.template_root)
         runtime.prepare_workspace(workspace, task)
         attempts: list[Any] = []
@@ -113,4 +130,4 @@ class BranchPlanner:
                 return self.parse(result.final_message, parent_id=parent_id, branch_ids=branch_ids), tuple(attempts)
             except ValueError:
                 continue
-        raise PlanningFailure("PLANNING_FAILURE: planner did not produce two valid, diverse BranchSpecs after one retry")
+        raise PlanningFailure(f"PLANNING_FAILURE: planner did not produce {len(branch_ids)} valid BranchSpec(s) after one retry")

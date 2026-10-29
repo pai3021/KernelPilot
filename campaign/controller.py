@@ -1,4 +1,4 @@
-"""Serial 1-round × 2-branch controller for Phase 2A."""
+"""Serial one-round controller; two branches by default, one for ablations."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from benchmark_backend.budget import BUDGET_FILE_ENV, initialize_budget, read_bu
 from benchmark_backend.resource_guard import block_path, read_block
 from .build_language import materialize_build_language, validate_build_language
 from .models import BranchResult, BranchSpec, RoundResult, RoundState
-from .planner import BranchPlanner, PlanningFailure
+from .planner import BranchPlanner, PlanningFailure, validate_branch_ids
 from .ranking import rank_candidates
 
 
@@ -92,7 +92,7 @@ class TwoBranchController:
         spawn_child: Callable[[str], Path] | None = None,
         artifact_root: Path | None = None,  # 产物位置
         child_label_prefix: str = "phase2a",
-        branch_ids: tuple[str, str] = ("b1", "b2"),
+        branch_ids: tuple[str, ...] = ("b1", "b2"),
         planning_context: str = "",
         before_branch: Callable[[BranchSpec], None] | None = None,
         branch_benchmark_limit: int = 1,
@@ -101,6 +101,7 @@ class TwoBranchController:
         planning_facts: Mapping[str, Any] | None = None,
         allow_strategy_adaptation: bool = False,
     ) -> None:
+        validate_branch_ids(branch_ids)
         if isinstance(branch_benchmark_limit, bool) or not isinstance(branch_benchmark_limit, int) or branch_benchmark_limit < 1:
             raise ValueError("branch_benchmark_limit must be a positive integer")
         if worker_timeout < 1:
@@ -165,7 +166,7 @@ class TwoBranchController:
                 raise RuntimeError(f"planner workspace git init failed: {completed.stderr.strip()}")
         return workspace
 
-    def _plan(self) -> tuple[BranchSpec, BranchSpec]:
+    def _plan(self) -> tuple[BranchSpec, ...]:
         planner = BranchPlanner(runtime_name=self.planner_runtime, template_root=self.project_root,
                                 model=self.runtime_model, reasoning_effort=self.runtime_reasoning_effort,
                                 benchmark_limit=self.branch_benchmark_limit,

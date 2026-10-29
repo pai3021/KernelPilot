@@ -27,6 +27,10 @@ def main() -> int:
     started = time.monotonic()
     request = json.loads(args.request.read_text())
     metadata = dict(request.get("metadata", {}))
+    # This helper is running: do not echo the pre-upload request as undispatched.
+    metadata["evaluation_dispatched"] = True
+    metadata["remote_process_started"] = True
+    metadata["failure_stage"] = "evaluation"
     try:
         from scripts import benchmark_adapter as adapter
 
@@ -37,6 +41,7 @@ def main() -> int:
         )
         status = "SUCCESS"
         error_log = ""
+        metadata.pop("failure_stage", None)
     except Exception as exc:
         status = "INFRA_FAILURE"
         error_log = f"Remote evaluator setup failure: {type(exc).__name__}: {exc}"

@@ -295,11 +295,15 @@ class CodexRuntime(AgentRuntime):
             common.extend(["--config", f'model_reasoning_effort="{reasoning_effort}"'])
         if resume:
             # 将公共 resume(session, request) 翻译为 Codex 的 exec resume 协议。
-            # common[:10] 截取到 exec，随后拼接 resume 参数；上面附加的
-            # model / reasoning 配置当前不会进入这条 resume 命令。
+            # common[:10] 截取到 exec；恢复也显式保留 model / reasoning。
             if not session_id:
                 raise ValueError("Codex resume requires a session_id from a real prior event")
-            return common[:10] + ["resume", "--json", "--output-last-message", str(final_message), session_id, request.prompt]
+            command = common[:10] + ["resume", "--json", "--output-last-message", str(final_message)]
+            if request.model:
+                command.extend(["--model", request.model])
+            if reasoning_effort:
+                command.extend(["--config", f'model_reasoning_effort="{reasoning_effort}"'])
+            return command + [session_id, request.prompt]
         return common + [self._runtime_prompt(request)]
 
     def run(self, request: AgentRunRequest) -> AgentRunResult:
